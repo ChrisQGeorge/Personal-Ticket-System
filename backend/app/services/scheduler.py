@@ -1,11 +1,12 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 
 from ..database import SessionLocal
 from ..models import Frequency, RecurringTemplate, Ticket
+from .email_service import check_all_email_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,11 @@ def fire_template(db, template: RecurringTemplate) -> None:
         description=template.description,
         priority=template.priority,
         est_hours=template.est_hours,
+        profile_id=template.profile_id,
     )
+    # Set relative due date if configured
+    if template.due_in_days is not None:
+        ticket.due_date = date.today() + timedelta(days=template.due_in_days)
     db.add(ticket)
 
     template.last_fired = datetime.utcnow()
@@ -72,4 +77,8 @@ async def scheduler_loop() -> None:
             check_recurring_templates()
         except Exception:
             logger.exception("Scheduler loop error")
+        try:
+            check_all_email_profiles()
+        except Exception:
+            logger.exception("Email check error")
         await asyncio.sleep(60)

@@ -10,6 +10,7 @@ import {
   Frequency,
 } from "@/lib/types";
 import { createRecurring, updateRecurring, deleteRecurring } from "@/lib/api";
+import { useProfile } from "@/lib/profile-context";
 
 const PRIORITIES: Priority[] = ["very low", "low", "default", "high", "very high"];
 const FREQUENCIES: Frequency[] = ["daily", "weekly", "monthly"];
@@ -20,12 +21,14 @@ interface Props {
 
 export default function RecurringForm({ template }: Props) {
   const router = useRouter();
+  const { activeProfile } = useProfile();
   const isEdit = !!template;
 
   const [title, setTitle] = useState(template?.title ?? "");
   const [description, setDescription] = useState(template?.description ?? "");
   const [priority, setPriority] = useState<Priority>(template?.priority ?? "default");
   const [estHours, setEstHours] = useState(template?.est_hours?.toString() ?? "");
+  const [dueInDays, setDueInDays] = useState(template?.due_in_days?.toString() ?? "");
   const [active, setActive] = useState(template?.active ?? true);
   const [frequency, setFrequency] = useState<Frequency>(template?.frequency ?? "weekly");
   const [intervalCount, setIntervalCount] = useState(
@@ -60,6 +63,7 @@ export default function RecurringForm({ template }: Props) {
           description: description.trim() || undefined,
           priority,
           est_hours: estHours ? parseFloat(estHours) : undefined,
+          due_in_days: dueInDays ? parseInt(dueInDays) : undefined,
           active,
           frequency,
           interval_count: parseInt(intervalCount) || 1,
@@ -72,10 +76,12 @@ export default function RecurringForm({ template }: Props) {
           description: description.trim() || undefined,
           priority,
           est_hours: estHours ? parseFloat(estHours) : undefined,
+          due_in_days: dueInDays ? parseInt(dueInDays) : undefined,
           active,
           frequency,
           interval_count: parseInt(intervalCount) || 1,
           start_date: startDate,
+          profile_id: activeProfile?.id,
         };
         await createRecurring(data);
       }
@@ -166,6 +172,24 @@ export default function RecurringForm({ template }: Props) {
             onChange={(e) => setEstHours(e.target.value)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
+        </div>
+
+        {/* Due After (days) */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Due After (days)
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={dueInDays}
+            onChange={(e) => setDueInDays(e.target.value)}
+            placeholder="e.g. 7"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Days after creation to set the due date. Leave blank for no due date.
+          </p>
         </div>
 
         {/* Frequency */}

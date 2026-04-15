@@ -59,14 +59,13 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
     return score
 
 
-def get_next_ticket(db: Session) -> Optional[Tuple[Ticket, float]]:
+def get_next_ticket(db: Session, profile_id: Optional[int] = None) -> Optional[Tuple[Ticket, float]]:
     """Return the highest-priority ticket (lowest score) from the queue."""
     config = _get_config(db)
-    tickets = (
-        db.query(Ticket)
-        .filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
-        .all()
-    )
+    query = db.query(Ticket).filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
+    if profile_id is not None:
+        query = query.filter(Ticket.profile_id == profile_id)
+    tickets = query.all()
     if not tickets:
         return None
 
@@ -77,14 +76,13 @@ def get_next_ticket(db: Session) -> Optional[Tuple[Ticket, float]]:
     return scored[0]
 
 
-def get_all_scored(db: Session) -> List[Tuple[Ticket, float]]:
+def get_all_scored(db: Session, profile_id: Optional[int] = None) -> List[Tuple[Ticket, float]]:
     """Return all non-completed tickets with their scores, sorted."""
     config = _get_config(db)
-    tickets = (
-        db.query(Ticket)
-        .filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
-        .all()
-    )
+    query = db.query(Ticket).filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
+    if profile_id is not None:
+        query = query.filter(Ticket.profile_id == profile_id)
+    tickets = query.all()
     scored = [(t, compute_score(t, config)) for t in tickets]
     scored.sort(key=lambda x: x[1])
     return scored

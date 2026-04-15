@@ -45,6 +45,28 @@ class Frequency(str, enum.Enum):
 
 
 # ---------------------------------------------------------------------------
+# Profile model
+# ---------------------------------------------------------------------------
+
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    color = Column(String(7), nullable=False, default="#6366f1")  # hex color for UI
+    # IMAP email config (optional)
+    imap_host = Column(String(255), nullable=True)
+    imap_port = Column(Integer, nullable=True, default=993)
+    imap_user = Column(String(255), nullable=True)
+    imap_password = Column(String(255), nullable=True)
+    imap_use_ssl = Column(Boolean, nullable=False, default=True)
+    email_enabled = Column(Boolean, nullable=False, default=False)
+
+    tickets = relationship("Ticket", back_populates="profile")
+    recurring_templates = relationship("RecurringTemplate", back_populates="profile")
+
+
+# ---------------------------------------------------------------------------
 # Association table for self-referential many-to-many ticket relationships
 # ---------------------------------------------------------------------------
 
@@ -90,6 +112,9 @@ class Ticket(Base):
     )
     est_hours = Column(Float, nullable=True)
     skip_count = Column(Integer, nullable=False, default=0)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
+
+    profile = relationship("Profile", back_populates="tickets")
 
     # Self-referential many-to-many
     related_tickets = relationship(
@@ -144,3 +169,9 @@ class RecurringTemplate(Base):
     start_date = Column(Date, nullable=False)
     last_fired = Column(DateTime, nullable=True)
     next_fire = Column(DateTime, nullable=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
+    # Relative due date: when a ticket is created from this template,
+    # set its due date to creation_date + due_in_days
+    due_in_days = Column(Integer, nullable=True)  # e.g., 7 means due 1 week after creation
+
+    profile = relationship("Profile", back_populates="recurring_templates")

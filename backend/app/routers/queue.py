@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -22,13 +24,14 @@ def _ticket_to_response(ticket: Ticket, score: float = 0.0) -> QueueTicketRespon
         est_hours=ticket.est_hours,
         skip_count=ticket.skip_count,
         related_ticket_ids=related_ids,
+        profile_id=ticket.profile_id,
         score=score,
     )
 
 
 @router.get("/next", response_model=QueueTicketResponse)
-def get_next(db: Session = Depends(get_db)):
-    result = get_next_ticket(db)
+def get_next(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    result = get_next_ticket(db, profile_id=profile_id)
     if result is None:
         raise HTTPException(status_code=404, detail="No tickets in queue")
     ticket, score = result
@@ -64,6 +67,7 @@ def complete_ticket(ticket_id: int, db: Session = Depends(get_db)):
         est_hours=ticket.est_hours,
         skip_count=ticket.skip_count,
         related_ticket_ids=related_ids,
+        profile_id=ticket.profile_id,
     )
 
 
@@ -90,16 +94,21 @@ def skip_ticket(ticket_id: int, db: Session = Depends(get_db)):
         est_hours=ticket.est_hours,
         skip_count=ticket.skip_count,
         related_ticket_ids=related_ids,
+        profile_id=ticket.profile_id,
     )
 
 
 @router.get("/stats", response_model=QueueStatsResponse)
-def get_stats(db: Session = Depends(get_db)):
-    total = db.query(Ticket).count()
-    total_open = db.query(Ticket).filter(Ticket.status == TicketStatus.OPEN).count()
-    total_in_progress = db.query(Ticket).filter(Ticket.status == TicketStatus.IN_PROGRESS).count()
-    total_completed = db.query(Ticket).filter(Ticket.status == TicketStatus.COMPLETED).count()
-    total_skipped = db.query(Ticket).filter(Ticket.status == TicketStatus.SKIPPED).count()
+def get_stats(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    base_query = db.query(Ticket)
+    if profile_id is not None:
+        base_query = base_query.filter(Ticket.profile_id == profile_id)
+
+    total = base_query.count()
+    total_open = base_query.filter(Ticket.status == TicketStatus.OPEN).count()
+    total_in_progress = base_query.filter(Ticket.status == TicketStatus.IN_PROGRESS).count()
+    total_completed = base_query.filter(Ticket.status == TicketStatus.COMPLETED).count()
+    total_skipped = base_query.filter(Ticket.status == TicketStatus.SKIPPED).count()
 
     return QueueStatsResponse(
         total_open=total_open,

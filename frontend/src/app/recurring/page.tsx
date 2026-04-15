@@ -2,22 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { RecurringTemplate } from "@/lib/types";
 import { listRecurring } from "@/lib/api";
+import { useProfile } from "@/lib/profile-context";
 
 export default function RecurringPage() {
   const router = useRouter();
+  const { activeProfile } = useProfile();
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    listRecurring()
+  const fetchTemplates = useCallback(() => {
+    setLoading(true);
+    setError("");
+    listRecurring(activeProfile?.id)
       .then(setTemplates)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeProfile?.id]);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
   return (
     <div className="space-y-4">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ticket, TicketCreate, TicketUpdate, Priority, TicketStatus } from "@/lib/types";
 import { createTicket, updateTicket, deleteTicket } from "@/lib/api";
+import { useProfile } from "@/lib/profile-context";
 
 const PRIORITIES: Priority[] = ["very low", "low", "default", "high", "very high"];
 const STATUSES: TicketStatus[] = ["open", "in-progress", "completed", "skipped"];
@@ -14,6 +15,7 @@ interface Props {
 
 export default function TicketForm({ ticket }: Props) {
   const router = useRouter();
+  const { activeProfile } = useProfile();
   const isEdit = !!ticket;
 
   const [title, setTitle] = useState(ticket?.title ?? "");
@@ -66,6 +68,7 @@ export default function TicketForm({ ticket }: Props) {
           due_date: dueDate || undefined,
           est_hours: estHours ? parseFloat(estHours) : undefined,
           related_ticket_ids: related.length > 0 ? related : undefined,
+          profile_id: activeProfile?.id,
         };
         await createTicket(data);
       }

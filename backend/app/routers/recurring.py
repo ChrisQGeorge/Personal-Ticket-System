@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -29,12 +29,16 @@ def _template_to_response(template: RecurringTemplate) -> RecurringTemplateRespo
         start_date=template.start_date,
         last_fired=template.last_fired,
         next_fire=template.next_fire,
+        profile_id=template.profile_id,
     )
 
 
 @router.get("", response_model=list[RecurringTemplateResponse])
-def list_templates(db: Session = Depends(get_db)):
-    templates = db.query(RecurringTemplate).all()
+def list_templates(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    query = db.query(RecurringTemplate)
+    if profile_id is not None:
+        query = query.filter(RecurringTemplate.profile_id == profile_id)
+    templates = query.all()
     return [_template_to_response(t) for t in templates]
 
 
@@ -48,6 +52,7 @@ def create_template(payload: RecurringTemplateCreate, db: Session = Depends(get_
         frequency=payload.frequency,
         interval_count=payload.interval_count,
         start_date=payload.start_date,
+        profile_id=payload.profile_id,
     )
     # Compute initial next_fire
     template.next_fire = compute_next_fire(template)

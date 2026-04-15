@@ -1,27 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Ticket } from "@/lib/types";
 import { getNextTicket, completeTicket, skipTicket } from "@/lib/api";
+import { useProfile } from "@/lib/profile-context";
 
 export default function QueuePage() {
+  const { activeProfile } = useProfile();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState("");
   const [empty, setEmpty] = useState(false);
 
-  useEffect(() => {
-    loadNext();
-  }, []);
-
-  async function loadNext() {
+  const loadNext = useCallback(async () => {
     setLoading(true);
     setError("");
     setEmpty(false);
     try {
-      const t = await getNextTicket();
+      const t = await getNextTicket(activeProfile?.id);
       if (t) {
         setTicket(t);
       } else {
@@ -33,7 +31,11 @@ export default function QueuePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeProfile?.id]);
+
+  useEffect(() => {
+    loadNext();
+  }, [loadNext]);
 
   async function handleComplete() {
     if (!ticket) return;
@@ -41,7 +43,7 @@ export default function QueuePage() {
     setError("");
     try {
       await completeTicket(ticket.id);
-      const next = await getNextTicket();
+      const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
       } else {
@@ -61,7 +63,7 @@ export default function QueuePage() {
     setError("");
     try {
       await skipTicket(ticket.id);
-      const next = await getNextTicket();
+      const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
       } else {

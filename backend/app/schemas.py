@@ -18,6 +18,7 @@ class TicketBase(BaseModel):
 
 class TicketCreate(TicketBase):
     related_ticket_ids: Optional[List[int]] = None
+    profile_id: Optional[int] = None
 
 
 class TicketUpdate(BaseModel):
@@ -41,6 +42,7 @@ class TicketResponse(BaseModel):
     est_hours: Optional[float] = None
     skip_count: int
     related_ticket_ids: List[int] = []
+    profile_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -105,10 +107,11 @@ class RecurringTemplateBase(BaseModel):
     frequency: str
     interval_count: int = 1
     start_date: date
+    due_in_days: Optional[int] = None
 
 
 class RecurringTemplateCreate(RecurringTemplateBase):
-    pass
+    profile_id: Optional[int] = None
 
 
 class RecurringTemplateUpdate(BaseModel):
@@ -120,6 +123,7 @@ class RecurringTemplateUpdate(BaseModel):
     frequency: Optional[str] = None
     interval_count: Optional[int] = None
     start_date: Optional[date] = None
+    due_in_days: Optional[int] = None
 
 
 class RecurringTemplateResponse(BaseModel):
@@ -134,5 +138,41 @@ class RecurringTemplateResponse(BaseModel):
     start_date: date
     last_fired: Optional[datetime] = None
     next_fire: Optional[datetime] = None
+    profile_id: Optional[int] = None
+    due_in_days: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Profile schemas
+# ---------------------------------------------------------------------------
+
+class ProfileCreate(BaseModel):
+    name: str = Field(..., max_length=100)
+    color: Optional[str] = "#6366f1"
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100)
+    color: Optional[str] = None
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = None
+    imap_user: Optional[str] = None
+    imap_password: Optional[str] = None
+    imap_use_ssl: Optional[bool] = None
+    email_enabled: Optional[bool] = None
+
+
+class ProfileResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = None
+    imap_user: Optional[str] = None
+    imap_use_ssl: bool
+    email_enabled: bool
+    has_password: bool = False
 
     model_config = {"from_attributes": True}

@@ -24,6 +24,7 @@ def _ticket_to_response(ticket: Ticket) -> TicketResponse:
         est_hours=ticket.est_hours,
         skip_count=ticket.skip_count,
         related_ticket_ids=related_ids,
+        profile_id=ticket.profile_id,
     )
 
 
@@ -31,6 +32,7 @@ def _ticket_to_response(ticket: Ticket) -> TicketResponse:
 def list_tickets(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
+    profile_id: Optional[int] = Query(None),
     sort_by: Optional[str] = Query("date_created"),
     sort_order: Optional[str] = Query("desc"),
     db: Session = Depends(get_db),
@@ -41,6 +43,8 @@ def list_tickets(
         query = query.filter(Ticket.status == status)
     if priority:
         query = query.filter(Ticket.priority == priority)
+    if profile_id is not None:
+        query = query.filter(Ticket.profile_id == profile_id)
 
     # Sorting
     sort_column = getattr(Ticket, sort_by, Ticket.date_created)
@@ -61,6 +65,7 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)):
         due_date=payload.due_date,
         priority=payload.priority,
         est_hours=payload.est_hours,
+        profile_id=payload.profile_id,
     )
     db.add(ticket)
     db.flush()

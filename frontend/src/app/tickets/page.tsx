@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { Ticket, TicketStatus, Priority } from "@/lib/types";
 import { listTickets } from "@/lib/api";
+import { useProfile } from "@/lib/profile-context";
 
 const STATUS_OPTIONS: (TicketStatus | "")[] = ["", "open", "in-progress", "completed", "skipped"];
 const PRIORITY_OPTIONS: (Priority | "")[] = ["", "very low", "low", "default", "high", "very high"];
@@ -21,6 +22,7 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 export default function TicketsPage() {
   const router = useRouter();
+  const { activeProfile } = useProfile();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,6 +39,7 @@ export default function TicketsPage() {
       const data = await listTickets({
         status: statusFilter || undefined,
         priority: priorityFilter || undefined,
+        profile_id: activeProfile?.id,
       });
       setTickets(data);
     } catch (e: unknown) {
@@ -44,7 +47,7 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, priorityFilter]);
+  }, [statusFilter, priorityFilter, activeProfile?.id]);
 
   useEffect(() => {
     fetchTickets();

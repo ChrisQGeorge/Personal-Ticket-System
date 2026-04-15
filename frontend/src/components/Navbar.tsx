@@ -3,18 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useProfile } from "@/lib/profile-context";
 
 const links = [
   { href: "/", label: "Home" },
   { href: "/tickets", label: "Tickets" },
   { href: "/queue", label: "Queue" },
   { href: "/recurring", label: "Recurring" },
+  { href: "/import", label: "Import" },
+  { href: "/backup", label: "Backup" },
   { href: "/config", label: "Settings" },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { activeProfile } = useProfile();
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -25,8 +29,17 @@ export default function Navbar() {
     <nav className="bg-indigo-700 text-white shadow-md">
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex h-14 items-center justify-between">
-          <Link href="/" className="text-xl font-bold tracking-wide">
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-wide">
             PTS
+            {activeProfile && (
+              <span className="flex items-center gap-1.5 rounded-full bg-indigo-800 px-2.5 py-0.5 text-xs font-medium text-indigo-100">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: activeProfile.color }}
+                />
+                {activeProfile.name}
+              </span>
+            )}
           </Link>
 
           {/* Desktop links */}
