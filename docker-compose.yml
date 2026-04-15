@@ -1,0 +1,56 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: pts_db
+    environment:
+      MYSQL_ROOT_PASSWORD: pts_root_s3cret
+      MYSQL_DATABASE: pts_db
+      MYSQL_USER: pts_user
+      MYSQL_PASSWORD: pts_pass_2024
+    volumes:
+      - pts_mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - pts_network
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: pts_backend
+    environment:
+      DATABASE_URL: "mysql+pymysql://pts_user:pts_pass_2024@db:3306/pts_db"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - pts_network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: pts_frontend
+    environment:
+      BACKEND_URL: "http://backend:8000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - pts_network
+    restart: unless-stopped
+
+networks:
+  pts_network:
+    driver: bridge
+
+volumes:
+  pts_mysql_data:
