@@ -25,6 +25,8 @@ def update_user_role(user_id: int, payload: UserUpdateRole, db: Session = Depend
         raise HTTPException(404, "User not found")
     if user.id == admin.id:
         raise HTTPException(400, "Cannot change your own role")
+    if payload.role not in ("admin", "user"):
+        raise HTTPException(400, "Invalid role. Must be 'admin' or 'user'.")
     user.role = payload.role
     db.commit()
     logger.warning("Admin '%s' changed user '%s' role to '%s'", admin.username, user.username, payload.role)
@@ -39,6 +41,7 @@ def update_user_active(user_id: int, payload: UserUpdateActive, db: Session = De
     if user.id == admin.id:
         raise HTTPException(400, "Cannot deactivate yourself")
     user.is_active = payload.is_active
+    user.token_version += 1  # Invalidate all existing tokens
     db.commit()
     logger.warning("Admin '%s' set user '%s' active=%s", admin.username, user.username, payload.is_active)
     return UserResponse.model_validate(user)

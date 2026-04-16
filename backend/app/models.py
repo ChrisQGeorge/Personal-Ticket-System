@@ -1,5 +1,5 @@
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -61,7 +61,8 @@ class User(Base):
     password_hash = Column(String(512), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    token_version = Column(Integer, nullable=False, default=0)
 
     profiles = relationship("Profile", back_populates="user")
 
@@ -126,7 +127,7 @@ class Ticket(Base):
         nullable=False,
         default=TicketStatus.OPEN,
     )
-    date_created = Column(DateTime, nullable=False, default=datetime.utcnow)
+    date_created = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     description = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
     priority = Column(

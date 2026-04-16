@@ -1,5 +1,4 @@
--- Ensure the application user can connect from any host in the Docker network
--- Note: MYSQL_USER and MYSQL_PASSWORD from docker-compose handle initial creation.
--- This script ensures '%' host access in case of network changes.
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+-- Grant the application user minimal privileges on the app database.
+-- ALTER and CREATE are needed for startup migrations.
+GRANT SELECT, INSERT, UPDATE, DELETE, ALTER, CREATE, INDEX ON pts_db.* TO 'pts_user'@'%';
 FLUSH PRIVILEGES;

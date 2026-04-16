@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -14,11 +15,12 @@ DB_NAME = os.getenv("DB_NAME", "pts_db")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+    f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASS)}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
 )
 
 if DB_PASS == "pts_pass_2024":
-    logger.warning("Using default database password! Set DB_PASS environment variable for production.")
+    logger.critical("SECURITY: Using default database password! Set DB_PASS in .env")
+    raise RuntimeError("Default database password detected. Set DB_PASS environment variable.")
 
 engine = create_engine(
     DATABASE_URL,

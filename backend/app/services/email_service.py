@@ -1,6 +1,8 @@
 import imaplib
+import ipaddress
 import email
 import logging
+import socket
 from email.header import decode_header
 from html.parser import HTMLParser
 
@@ -72,6 +74,24 @@ def get_email_body(msg) -> str:
         return text.strip()
 
 
+def _is_safe_host(host: str) -> bool:
+    """Check if host is safe (not internal/private)."""
+    blocked = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "db", "backend", "frontend", "pts_db", "pts_backend", "pts_frontend"}
+    if host.lower().strip() in blocked:
+        return False
+    if host.lower().endswith((".internal", ".local")):
+        return False
+    try:
+        resolved = socket.getaddrinfo(host, None)
+        for family, type_, proto, canonname, sockaddr in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                return False
+    except Exception:
+        pass
+    return True
+
+
 def check_profile_email(profile_id: int) -> None:
     """Check IMAP inbox for a profile and create tickets from unread emails."""
     db = SessionLocal()
@@ -82,58 +102,71 @@ def check_profile_email(profile_id: int) -> None:
         if not profile.imap_host or not profile.imap_user or not profile.imap_password:
             return
 
-        # Connect to IMAP
-        password = decrypt_value(profile.imap_password)
-        if profile.imap_use_ssl:
-            mail = imaplib.IMAP4_SSL(profile.imap_host, profile.imap_port or 993)
-        else:
-            mail = imaplib.IMAP4(profile.imap_host, profile.imap_port or 143)
-
-        mail.login(profile.imap_user, password)
-        mail.select("INBOX")
-
-        # Search for unread/unseen messages
-        status, messages = mail.search(None, "UNSEEN")
-        if status != "OK":
-            logger.warning("IMAP search failed for profile %d", profile_id)
-            mail.logout()
+        if not _is_safe_host(profile.imap_host):
+            logger.warning("Blocked SSRF attempt: profile %d has internal IMAP host '%s'", profile_id, profile.imap_host)
             return
 
-        msg_nums = messages[0].split()
-        for num in msg_nums:
-            try:
-                status, msg_data = mail.fetch(num, "(RFC822)")
-                if status != "OK":
-                    continue
-                raw = msg_data[0][1]
-                msg = email.message_from_bytes(raw)
+        # Connect to IMAP
+        try:
+            password = decrypt_value(profile.imap_password)
+        except ValueError:
+            logger.error("Cannot decrypt IMAP password for profile %d — skipping", profile_id)
+            return
+        mail = None
+        try:
+            if profile.imap_use_ssl:
+                mail = imaplib.IMAP4_SSL(profile.imap_host, profile.imap_port or 993)
+            else:
+                mail = imaplib.IMAP4(profile.imap_host, profile.imap_port or 143)
 
-                subject = decode_email_subject(msg) or "Untitled Email Ticket"
-                body = get_email_body(msg)
+            mail.login(profile.imap_user, password)
+            mail.select("INBOX")
 
-                ticket = Ticket(
-                    title=subject[:255],
-                    description=body if body else None,
-                    profile_id=profile.id,
-                    priority="default",
-                    status="open",
-                )
-                db.add(ticket)
-                db.commit()
+            # Search for unread/unseen messages
+            status, messages = mail.search(None, "UNSEEN")
+            if status != "OK":
+                logger.warning("IMAP search failed for profile %d", profile_id)
+                return
 
-                # Mark as read (add Seen flag)
-                mail.store(num, "+FLAGS", "\\Seen")
-                logger.info(
-                    "Created ticket from email: '%s' for profile %d",
-                    subject[:50],
-                    profile_id,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to process email %s for profile %d", num, profile_id
-                )
+            msg_nums = messages[0].split()
+            for num in msg_nums:
+                try:
+                    status, msg_data = mail.fetch(num, "(RFC822)")
+                    if status != "OK":
+                        continue
+                    raw = msg_data[0][1]
+                    msg = email.message_from_bytes(raw)
 
-        mail.logout()
+                    subject = decode_email_subject(msg) or "Untitled Email Ticket"
+                    body = get_email_body(msg)
+
+                    ticket = Ticket(
+                        title=subject[:255],
+                        description=body if body else None,
+                        profile_id=profile.id,
+                        priority="default",
+                        status="open",
+                    )
+                    db.add(ticket)
+                    db.commit()
+
+                    # Mark as read (add Seen flag)
+                    mail.store(num, "+FLAGS", "\\Seen")
+                    logger.info(
+                        "Created ticket from email: '%s' for profile %d",
+                        subject[:50],
+                        profile_id,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to process email %s for profile %d", num, profile_id
+                    )
+        finally:
+            if mail:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
     except imaplib.IMAP4.error:
         logger.exception("IMAP connection failed for profile %d", profile_id)
     except Exception:

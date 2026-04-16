@@ -254,6 +254,19 @@ export async function getMe(): Promise<User> {
   return request("/api/auth/me");
 }
 
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return request("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 // Admin
 export async function listUsers(): Promise<User[]> {
   return request("/api/admin/users");
@@ -284,8 +297,27 @@ export async function deleteUser(id: number): Promise<void> {
 }
 
 // Backup
-export function getBackupUrl(): string {
-  return `${BASE}/api/backup`;
+export async function downloadBackup(): Promise<void> {
+  const res = await fetch(`${BASE}/api/backup`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Backup failed: ${text || res.statusText}`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename=([^\s;]+)/);
+  const filename = match ? match[1] : "pts_backup.json";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export async function restoreBackup(file: File): Promise<{

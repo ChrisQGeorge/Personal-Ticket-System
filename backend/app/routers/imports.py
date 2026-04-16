@@ -17,6 +17,7 @@ router = APIRouter(tags=["import"])
 
 VALID_PRIORITIES = {"very low", "low", "default", "high", "very high"}
 VALID_STATUSES = {"open", "in-progress", "completed", "skipped"}
+MAX_IMPORT_ROWS = 5000
 
 
 def parse_date(val):
@@ -60,6 +61,16 @@ def normalize_headers(headers):
     return [str(h).strip().lower() if h else "" for h in headers]
 
 
+FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r', '\n')
+
+def _sanitize_cell(value: str) -> str:
+    """Strip formula prefixes to prevent CSV/Excel injection."""
+    if value and isinstance(value, str):
+        while value and value[0] in FORMULA_PREFIXES:
+            value = value[1:]
+    return value.strip()
+
+
 def _get_cell(row, col_map, *names):
     """Get a cell value by trying multiple column name variants."""
     for name in names:
@@ -78,12 +89,12 @@ def rows_to_tickets(rows, headers, db: Session, profile_id: Optional[int] = None
     for row_num, row in enumerate(rows, start=2):  # row 1 is headers
         try:
             title_val = _get_cell(row, col_map, "title")
-            title = str(title_val).strip() if title_val else ""
+            title = _sanitize_cell(str(title_val)) if title_val else ""
             if not title or title.lower() == "none":
                 continue
 
             description_val = _get_cell(row, col_map, "description")
-            description = str(description_val).strip() if description_val else None
+            description = _sanitize_cell(str(description_val)) if description_val else None
             if description and description.lower() == "none":
                 description = None
 
@@ -161,6 +172,8 @@ async def import_tickets(
 
         headers = all_rows[0]
         data_rows = all_rows[1:]
+        if len(data_rows) > MAX_IMPORT_ROWS:
+            raise HTTPException(400, f"Too many rows. Maximum is {MAX_IMPORT_ROWS}.")
         imported, errors = rows_to_tickets(data_rows, headers, db, profile_id=profile_id)
 
     elif ext in ("xlsx", "xls"):
@@ -179,6 +192,8 @@ async def import_tickets(
 
         data_rows = list(rows_iter)
         wb.close()
+        if len(data_rows) > MAX_IMPORT_ROWS:
+            raise HTTPException(400, f"Too many rows. Maximum is {MAX_IMPORT_ROWS}.")
         imported, errors = rows_to_tickets(data_rows, list(headers), db, profile_id=profile_id)
 
     else:

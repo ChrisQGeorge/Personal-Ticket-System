@@ -34,6 +34,18 @@ Thumbs.db
 # Package locks (frontend has its own)
 # Keep package-lock.json in frontend/
 
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+service-account.json
+
+# Backup files (may contain sensitive data)
+*_backup_*.json
+pts_backup_*.json
+
 # Build artifacts
 dist/
 build/

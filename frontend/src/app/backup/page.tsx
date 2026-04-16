@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { getBackupUrl, restoreBackup } from "@/lib/api";
+import { downloadBackup, restoreBackup } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -18,6 +18,7 @@ export default function BackupPage() {
   const { refreshProfiles } = useProfile();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<RestoreResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +46,18 @@ export default function BackupPage() {
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
+  }
+
+  async function handleDownload() {
+    setError("");
+    setDownloading(true);
+    try {
+      await downloadBackup();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Backup download failed.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function handleRestore(e: React.FormEvent) {
@@ -92,14 +105,20 @@ export default function BackupPage() {
         </div>
       )}
 
+      {error && (
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="mb-10">
-        <a
-          href={getBackupUrl()}
-          download
-          className="inline-flex min-h-[44px] items-center rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="inline-flex min-h-[44px] items-center rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
         >
-          Download Backup
-        </a>
+          {downloading ? "Downloading..." : "Download Backup"}
+        </button>
       </div>
 
       {/* Restore Section */}
@@ -109,12 +128,6 @@ export default function BackupPage() {
         Restoring from a backup will replace ALL existing data. This action
         cannot be undone.
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
 
       {!result && (
         <form onSubmit={handleRestore} className="space-y-4">

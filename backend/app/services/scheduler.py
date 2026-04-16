@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 
@@ -41,7 +41,7 @@ def fire_template(db, template: RecurringTemplate) -> None:
         ticket.due_date = date.today() + timedelta(days=template.due_in_days)
     db.add(ticket)
 
-    template.last_fired = datetime.utcnow()
+    template.last_fired = datetime.now(timezone.utc)
     template.next_fire = compute_next_fire(template)
     db.commit()
     logger.info("Fired recurring template %d -> created ticket '%s'", template.id, template.title)
@@ -51,7 +51,7 @@ def check_recurring_templates() -> None:
     """Check all active templates and fire those whose next_fire <= now."""
     db = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         templates = (
             db.query(RecurringTemplate)
             .filter(

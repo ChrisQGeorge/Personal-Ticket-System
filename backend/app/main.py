@@ -18,7 +18,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables and start scheduler
+    # Startup: validate secrets before anything else
+    from .auth import init_secrets
+    logger.info("Initializing secrets...")
+    init_secrets()
+
+    # Create tables and start scheduler
     logger.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created.")
@@ -59,6 +64,13 @@ async def lifespan(app: FastAPI):
             db.execute(text("ALTER TABLE profiles ADD CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users(id)"))
             db.commit()
             logger.info("Added user_id column to profiles table.")
+
+        # Add token_version to users if missing
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
+        if "token_version" not in user_cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"))
+            db.commit()
+            logger.info("Added token_version column to users table.")
 
         # Widen imap_password column if it's too narrow for encrypted values
         try:
@@ -148,6 +160,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Server"] = "PTS"
         return response
 
 

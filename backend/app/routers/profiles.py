@@ -1,5 +1,10 @@
 import imaplib
+import ipaddress
 import logging
+import socket
+import time
+from collections import defaultdict
+from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -12,6 +17,50 @@ from ..schemas import ProfileCreate, ProfileResponse, ProfileUpdate
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+
+BLOCKED_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "db", "backend", "frontend", "pts_db", "pts_backend", "pts_frontend"}
+
+
+def _validate_imap_host(host: str) -> None:
+    """Block SSRF via IMAP to internal/private networks."""
+    if not host:
+        return
+    host_lower = host.lower().strip()
+
+    # Block known internal hostnames
+    if host_lower in BLOCKED_HOSTNAMES:
+        raise HTTPException(400, "IMAP host cannot be an internal/localhost address")
+
+    # Block Docker-internal .local hostnames
+    if host_lower.endswith(".internal") or host_lower.endswith(".local"):
+        raise HTTPException(400, "IMAP host cannot be an internal address")
+
+    # Try to resolve and check for private/reserved IPs
+    try:
+        resolved = socket.getaddrinfo(host, None)
+        for family, type_, proto, canonname, sockaddr in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                raise HTTPException(400, "IMAP host resolves to a private/internal IP address")
+    except socket.gaierror:
+        pass  # Can't resolve — let the IMAP connection fail naturally
+    except HTTPException:
+        raise  # Re-raise our own exceptions
+    except Exception:
+        pass  # Other resolution errors — let IMAP handle it
+
+_test_attempts: dict[int, list[float]] = defaultdict(list)
+_test_lock = Lock()
+
+
+def _check_test_rate_limit(profile_id: int) -> None:
+    now = time.time()
+    with _test_lock:
+        attempts = _test_attempts[profile_id]
+        _test_attempts[profile_id] = [t for t in attempts if now - t < 60]
+        if len(_test_attempts[profile_id]) >= 3:  # 3 attempts per minute
+            raise HTTPException(429, "Too many test attempts. Try again in a minute.")
+        _test_attempts[profile_id].append(now)
 
 
 def _profile_to_response(profile: Profile) -> ProfileResponse:
@@ -89,6 +138,9 @@ def update_profile(
 
     update_data = payload.model_dump(exclude_unset=True)
 
+    # Validate IMAP host against SSRF
+    _validate_imap_host(update_data.get("imap_host") or profile.imap_host)
+
     # Encrypt IMAP password before storing
     if "imap_password" in update_data and update_data["imap_password"] is not None:
         update_data["imap_password"] = encrypt_value(update_data["imap_password"])
@@ -129,13 +181,20 @@ def test_email(
     user: User = Depends(get_current_user),
 ):
     """Test the IMAP connection for a profile."""
+    _check_test_rate_limit(profile_id)
     profile = _verify_profile_ownership(db, profile_id, user)
 
     if not profile.imap_host or not profile.imap_user or not profile.imap_password:
         return {"success": False, "message": "IMAP credentials are not fully configured."}
 
+    # Validate IMAP host against SSRF
+    _validate_imap_host(profile.imap_host)
+
     try:
-        password = decrypt_value(profile.imap_password)
+        try:
+            password = decrypt_value(profile.imap_password)
+        except ValueError:
+            return {"success": False, "message": "Cannot decrypt stored password. Please re-enter and save your IMAP password."}
 
         if profile.imap_use_ssl:
             mail = imaplib.IMAP4_SSL(profile.imap_host, profile.imap_port or 993)

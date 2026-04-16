@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def get_priority_weight(priority: Priority, config: QueueConfig) -> float:
 
 def compute_score(ticket: Ticket, config: QueueConfig) -> float:
     """Compute the weighted FIFO score for a ticket. Lower score = served first."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Base FIFO score: older tickets get lower (better) scores
     days_since_creation = (now - ticket.date_created).total_seconds() / 86400.0

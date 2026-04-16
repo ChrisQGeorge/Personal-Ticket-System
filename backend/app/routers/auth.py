@@ -4,13 +4,13 @@ import time
 from collections import defaultdict
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from ..auth import hash_password, verify_password, create_access_token, get_current_user
 from ..database import get_db
 from ..models import User, UserRole, Profile
-from ..schemas import LoginRequest, RegisterRequest, UserResponse
+from ..schemas import ChangePasswordRequest, LoginRequest, RegisterRequest, UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,23 @@ _login_attempts: dict[str, list[float]] = defaultdict(list)
 _login_lock = Lock()
 MAX_LOGIN_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+
+_ip_attempts: dict[str, list[float]] = defaultdict(list)
+_ip_lock = Lock()
+MAX_IP_ATTEMPTS = 20  # 20 attempts per IP per window
+IP_WINDOW_SECONDS = 300
+
+
+def _check_ip_rate_limit(request: Request) -> None:
+    """Rate limit by client IP."""
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    with _ip_lock:
+        attempts = _ip_attempts[client_ip]
+        _ip_attempts[client_ip] = [t for t in attempts if now - t < IP_WINDOW_SECONDS]
+        if len(_ip_attempts[client_ip]) >= MAX_IP_ATTEMPTS:
+            raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
+        _ip_attempts[client_ip].append(now)
 
 
 def _check_rate_limit(key: str) -> None:
@@ -37,7 +54,8 @@ def _check_rate_limit(key: str) -> None:
 
 
 @router.post("/login")
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    _check_ip_rate_limit(request)
     _check_rate_limit(payload.username)
 
     user = db.query(User).filter(User.username == payload.username).first()
@@ -52,7 +70,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         logger.warning("Failed login attempt for username '%s'", payload.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token(user.id, user.role.value)
+    token = create_access_token(user.id, user.role.value, user.token_version)
     response.set_cookie(
         key="access_token",
         value=token,
@@ -60,19 +78,20 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         samesite="lax",
         max_age=86400,
         secure=COOKIE_SECURE,
-        path="/api",
+        path="/",
     )
     logger.info("User '%s' logged in successfully", user.username)
     return {"message": "Login successful", "user": UserResponse.model_validate(user)}
 
 
 @router.post("/register")
-def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    _check_ip_rate_limit(request)
     _check_rate_limit(f"register:{payload.username}")
 
     # Check if username taken
     if db.query(User).filter(User.username == payload.username).first():
-        raise HTTPException(status_code=409, detail="Username already taken")
+        raise HTTPException(status_code=400, detail="Registration failed")
 
     # First user is admin
     user_count = db.query(User).count()
@@ -93,7 +112,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     db.commit()
 
     # Auto-login after registration
-    token = create_access_token(user.id, user.role.value)
+    token = create_access_token(user.id, user.role.value, user.token_version)
     response.set_cookie(
         key="access_token",
         value=token,
@@ -101,15 +120,42 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         samesite="lax",
         max_age=86400,
         secure=COOKIE_SECURE,
-        path="/api",
+        path="/",
     )
     logger.info("New user registered: '%s' (role: %s)", user.username, role.value)
     return {"message": "Registration successful", "user": UserResponse.model_validate(user)}
 
 
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    user.password_hash = hash_password(payload.new_password)
+    user.token_version += 1
+    db.commit()
+    # Issue new token with updated version
+    token = create_access_token(user.id, user.role.value, user.token_version)
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=86400,
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+    logger.info("User '%s' changed their password", user.username)
+    return {"message": "Password changed successfully"}
+
+
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("access_token", path="/api")
+    response.delete_cookie("access_token", path="/")
     return {"message": "Logged out"}
 
 

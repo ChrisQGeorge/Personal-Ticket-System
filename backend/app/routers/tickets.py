@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,16 @@ from ..models import Priority, Profile, Ticket, TicketStatus, User
 from ..schemas import TicketCreate, TicketResponse, TicketUpdate
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+VALID_PRIORITIES = {e.value for e in Priority}
+VALID_STATUSES = {e.value for e in TicketStatus}
+
+
+def _strip_html_tags(text: str) -> str:
+    """Strip HTML tags from input to prevent stored XSS."""
+    if not text:
+        return text
+    return re.sub(r'<[^>]+>', '', text)
 
 
 def _ticket_to_response(ticket: Ticket) -> TicketResponse:
@@ -90,12 +101,15 @@ def create_ticket(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if payload.priority and payload.priority not in VALID_PRIORITIES:
+        raise HTTPException(400, f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
+
     if payload.profile_id is not None:
         _verify_profile_ownership(db, payload.profile_id, user)
 
     ticket = Ticket(
-        title=payload.title,
-        description=payload.description,
+        title=_strip_html_tags(payload.title),
+        description=_strip_html_tags(payload.description) if payload.description else None,
         due_date=payload.due_date,
         priority=payload.priority,
         est_hours=payload.est_hours,
@@ -137,6 +151,11 @@ def update_ticket(
     ticket = _verify_ticket_ownership(db, ticket_id, user)
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    if "title" in update_data:
+        update_data["title"] = _strip_html_tags(update_data["title"])
+    if "description" in update_data:
+        update_data["description"] = _strip_html_tags(update_data["description"]) if update_data["description"] else None
 
     # Handle related tickets separately (verify ownership)
     related_ids = update_data.pop("related_ticket_ids", None)

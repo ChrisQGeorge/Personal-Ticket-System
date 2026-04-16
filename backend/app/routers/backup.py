@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -85,7 +85,7 @@ def _serialize_config(c: QueueConfig) -> dict:
     }
 
 
-@router.get("/backup")
+@router.post("/backup")
 def download_backup(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -114,14 +114,13 @@ def download_backup(
 
     serialized_profiles = [_serialize_profile(p) for p in profiles]
 
-    # Strip IMAP passwords for non-admin users
-    if user.role != UserRole.ADMIN:
-        for p in serialized_profiles:
-            p.pop("imap_password", None)
+    # Strip IMAP passwords from ALL backups — credentials should never be exported
+    for p in serialized_profiles:
+        p.pop("imap_password", None)
 
     backup = {
         "version": 1,
-        "exported_at": datetime.utcnow().isoformat(),
+        "exported_at": datetime.now(timezone.utc).isoformat(),
         "profiles": serialized_profiles,
         "tickets": [_serialize_ticket(t) for t in tickets],
         "recurring_templates": [_serialize_template(t) for t in templates],
@@ -138,7 +137,7 @@ def download_backup(
         media_type="application/json",
         headers={
             "Content-Disposition": (
-                f"attachment; filename=pts_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+                f"attachment; filename=pts_backup_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
             )
         },
     )
@@ -160,8 +159,30 @@ async def restore_backup(
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON file")
 
+    REQUIRED_BACKUP_KEYS = {"version", "profiles", "tickets"}
+
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Invalid backup format")
     if data.get("version") != 1:
         raise HTTPException(400, "Unsupported backup version")
+    if not REQUIRED_BACKUP_KEYS.issubset(data.keys()):
+        raise HTTPException(400, "Invalid backup format: missing required sections")
+
+    # Validate data types
+    if not isinstance(data.get("profiles"), list):
+        raise HTTPException(400, "Invalid backup format: profiles must be a list")
+    if not isinstance(data.get("tickets"), list):
+        raise HTTPException(400, "Invalid backup format: tickets must be a list")
+
+    # Validate each profile has required fields
+    for i, p in enumerate(data.get("profiles", [])):
+        if not isinstance(p, dict) or "name" not in p:
+            raise HTTPException(400, f"Invalid profile at index {i}")
+
+    # Validate each ticket has required fields
+    for i, t in enumerate(data.get("tickets", [])):
+        if not isinstance(t, dict) or "title" not in t:
+            raise HTTPException(400, f"Invalid ticket at index {i}")
 
     try:
         db.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
@@ -219,7 +240,7 @@ async def restore_backup(
                 date_created=(
                     datetime.fromisoformat(t["date_created"])
                     if t.get("date_created")
-                    else datetime.utcnow()
+                    else datetime.now(timezone.utc)
                 ),
                 description=t.get("description"),
                 due_date=(

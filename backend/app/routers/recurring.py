@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -15,6 +16,13 @@ from ..schemas import (
 from ..services.scheduler import compute_next_fire
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
+
+
+def _strip_html_tags(text: str) -> str:
+    """Strip HTML tags from input to prevent stored XSS."""
+    if not text:
+        return text
+    return re.sub(r'<[^>]+>', '', text)
 
 
 def _template_to_response(template: RecurringTemplate) -> RecurringTemplateResponse:
@@ -74,6 +82,10 @@ def create_template(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    VALID_FREQUENCIES = {e.value for e in Frequency}
+    if payload.frequency not in VALID_FREQUENCIES:
+        raise HTTPException(400, f"Invalid frequency. Must be one of: {', '.join(VALID_FREQUENCIES)}")
+
     if payload.profile_id is not None:
         _verify_profile_ownership(db, payload.profile_id, user)
         profile_id = payload.profile_id
@@ -84,8 +96,8 @@ def create_template(
         profile_id = default_profile.id
 
     template = RecurringTemplate(
-        title=payload.title,
-        description=payload.description,
+        title=_strip_html_tags(payload.title),
+        description=_strip_html_tags(payload.description) if payload.description else None,
         priority=payload.priority,
         est_hours=payload.est_hours,
         frequency=payload.frequency,
@@ -122,6 +134,10 @@ def update_template(
     template = _verify_template_ownership(db, template_id, user)
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "title" in update_data:
+        update_data["title"] = _strip_html_tags(update_data["title"])
+    if "description" in update_data:
+        update_data["description"] = _strip_html_tags(update_data["description"]) if update_data["description"] else None
     for field, value in update_data.items():
         setattr(template, field, value)
 

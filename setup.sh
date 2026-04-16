@@ -43,16 +43,27 @@ fi
 
 # Generate random passwords/keys
 generate_password() {
-    # Generate a 32-character alphanumeric password
     python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32)))" 2>/dev/null \
     || python -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32)))" 2>/dev/null \
     || openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32
 }
 
 generate_fernet_key() {
-    python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
-    || python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
-    || echo "GENERATE_ME_AFTER_INSTALL"
+    # Try cryptography library first, then fall back to raw base64 generation
+    # A Fernet key is just URL-safe base64 of 32 random bytes
+    local key
+    key=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
+        || python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
+        || python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())" 2>/dev/null \
+        || python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())" 2>/dev/null \
+        || openssl rand -base64 32 2>/dev/null \
+        || echo "")
+    if [ -z "$key" ]; then
+        echo -e "${RED}FATAL: Cannot generate Fernet encryption key.${NC}" >&2
+        echo -e "${RED}Ensure Python 3 or openssl is available.${NC}" >&2
+        exit 1
+    fi
+    echo "$key"
 }
 
 generate_jwt_secret() {
@@ -68,6 +79,13 @@ ROOT_PASSWORD=$(generate_password)
 JWT_SECRET=$(generate_jwt_secret)
 FERNET_KEY=$(generate_fernet_key)
 
+# Validate all secrets were generated
+if [ -z "$DB_PASSWORD" ] || [ -z "$ROOT_PASSWORD" ] || [ -z "$JWT_SECRET" ] || [ -z "$FERNET_KEY" ]; then
+    echo -e "${RED}FATAL: Failed to generate one or more secrets.${NC}"
+    echo "Ensure Python 3 or openssl is available."
+    exit 1
+fi
+
 echo -e "  ${GREEN}✓${NC} Database password generated"
 echo -e "  ${GREEN}✓${NC} Root password generated"
 echo -e "  ${GREEN}✓${NC} JWT secret generated"
@@ -78,21 +96,28 @@ cp "$TEMPLATE_FILE" "$ENV_FILE"
 
 # Replace all CHANGE_ME placeholders
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS sed
     sed -i '' "s|CHANGE_ME_root_password|${ROOT_PASSWORD}|g" "$ENV_FILE"
     sed -i '' "s|CHANGE_ME_db_password|${DB_PASSWORD}|g" "$ENV_FILE"
     sed -i '' "s|CHANGE_ME_jwt_secret|${JWT_SECRET}|g" "$ENV_FILE"
     sed -i '' "s|CHANGE_ME_fernet_key|${FERNET_KEY}|g" "$ENV_FILE"
 else
-    # Linux/Git Bash sed
     sed -i "s|CHANGE_ME_root_password|${ROOT_PASSWORD}|g" "$ENV_FILE"
     sed -i "s|CHANGE_ME_db_password|${DB_PASSWORD}|g" "$ENV_FILE"
     sed -i "s|CHANGE_ME_jwt_secret|${JWT_SECRET}|g" "$ENV_FILE"
     sed -i "s|CHANGE_ME_fernet_key|${FERNET_KEY}|g" "$ENV_FILE"
 fi
 
+# Verify no placeholders remain
+if grep -q "CHANGE_ME" "$ENV_FILE"; then
+    echo -e "${RED}ERROR: Some placeholders were not replaced. Check .env manually.${NC}"
+    exit 1
+fi
+
+# Restrict file permissions (owner read/write only)
+chmod 600 "$ENV_FILE"
+
 echo ""
-echo -e "${GREEN}✓ .env file created successfully!${NC}"
+echo -e "${GREEN}✓ .env file created successfully (permissions: 600)${NC}"
 echo ""
 echo -e "${CYAN}Next steps:${NC}"
 echo "  1. Review .env and adjust any values if needed"

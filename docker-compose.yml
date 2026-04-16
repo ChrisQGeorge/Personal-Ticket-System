@@ -4,7 +4,7 @@ services:
     container_name: pts_db
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_HOST: "localhost"
       MYSQL_DATABASE: ${MYSQL_DATABASE:-pts_db}
       MYSQL_USER: ${MYSQL_USER:-pts_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
@@ -52,7 +52,7 @@ services:
     environment:
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_BIND:-0.0.0.0}:3000:3000"
     depends_on:
       - backend
     networks:
