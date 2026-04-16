@@ -37,8 +37,12 @@ async def lifespan(app: FastAPI):
     try:
         inspector = inspect(engine)
 
-        # Add profile_id to tickets if missing
+        # Add missing columns to tickets
         ticket_cols = {c["name"] for c in inspector.get_columns("tickets")}
+        if "last_skipped_at" not in ticket_cols:
+            db.execute(text("ALTER TABLE tickets ADD COLUMN last_skipped_at DATETIME NULL"))
+            db.commit()
+            logger.info("Added last_skipped_at column to tickets table.")
         if "profile_id" not in ticket_cols:
             db.execute(text("ALTER TABLE tickets ADD COLUMN profile_id INTEGER NULL"))
             db.execute(text("ALTER TABLE tickets ADD CONSTRAINT fk_tickets_profile FOREIGN KEY (profile_id) REFERENCES profiles(id)"))
@@ -192,3 +196,31 @@ app.include_router(gamification.router, prefix="/api")
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/api/extension/download")
+def download_extension():
+    """Download the Chrome extension as a zip file."""
+    import io
+    import zipfile
+    from pathlib import Path
+    from fastapi.responses import StreamingResponse
+
+    ext_dir = Path(__file__).resolve().parent.parent / "chrome-extension"
+    if not ext_dir.is_dir():
+        from fastapi import HTTPException
+        raise HTTPException(404, "Chrome extension not found on server")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in ext_dir.rglob("*"):
+            if file_path.is_file() and "__pycache__" not in str(file_path):
+                arcname = str(file_path.relative_to(ext_dir))
+                zf.write(file_path, arcname)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=pts-chrome-extension.zip"},
+    )

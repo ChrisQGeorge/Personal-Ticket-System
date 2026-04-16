@@ -32,10 +32,12 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
     """Compute the weighted FIFO score for a ticket. Lower score = served first."""
     now = datetime.now(timezone.utc)
 
-    # Base FIFO score: older tickets get lower (better) scores
-    # MySQL stores naive datetimes, so strip tzinfo for comparison
-    created = ticket.date_created.replace(tzinfo=timezone.utc) if ticket.date_created.tzinfo is None else ticket.date_created
-    days_since_creation = (now - created).total_seconds() / 86400.0
+    # Base FIFO score: use last_skipped_at if available (resets age on skip),
+    # otherwise use date_created. Older = lower score = served first.
+    effective_date = ticket.last_skipped_at or ticket.date_created
+    if effective_date.tzinfo is None:
+        effective_date = effective_date.replace(tzinfo=timezone.utc)
+    days_since_effective = (now - effective_date).total_seconds() / 86400.0
 
     # Effort weight: lower effort -> lower score
     est = ticket.est_hours if ticket.est_hours is not None else 1.0
@@ -52,9 +54,9 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
             due_date_urgency = days_until_due * -config.due_date_weight
 
     score = (
-        days_since_creation * config.age_weight
+        days_since_effective * config.age_weight
         - get_priority_weight(ticket.priority, config)
-        - ticket.skip_count * config.skip_weight
+        + ticket.skip_count * config.skip_weight  # Skips INCREASE score (push to back)
         + est * config.effort_weight
         - due_date_urgency
     )

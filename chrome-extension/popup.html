@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div id="header">
+      <div class="header-left">
+        <span class="logo">PTS</span>
+        <span id="user-badge" class="user-badge hidden"></span>
+      </div>
+      <div class="header-right">
+        <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+        <button id="logout-btn" class="icon-btn hidden" title="Logout">&#8618;</button>
+      </div>
+    </div>
+
+    <!-- Gamification bar (shown when enabled) -->
+    <div id="game-bar" class="hidden">
+      <div class="game-bar-content">
+        <span class="game-level" id="game-level"></span>
+        <span class="game-rank" id="game-rank"></span>
+        <span class="game-xp" id="game-xp"></span>
+        <span class="game-streak" id="game-streak"></span>
+        <span class="game-combo" id="game-combo"></span>
+      </div>
+      <div class="xp-bar">
+        <div class="xp-bar-fill" id="xp-bar-fill"></div>
+      </div>
+    </div>
+
+    <!-- Setup screen -->
+    <div id="setup-screen" class="screen hidden">
+      <div class="screen-icon">&#128279;</div>
+      <h2>Connect to PTS</h2>
+      <p class="muted">Enter your PTS server address</p>
+      <form id="setup-form">
+        <input type="url" id="setup-url" placeholder="http://192.168.1.100:3000" required>
+        <button type="submit" class="btn btn-primary">Connect</button>
+      </form>
+      <p id="setup-error" class="error hidden"></p>
+    </div>
+
+    <!-- Login screen -->
+    <div id="login-screen" class="screen hidden">
+      <div class="screen-icon">&#128272;</div>
+      <h2>Sign In</h2>
+      <p class="muted" id="server-display"></p>
+      <form id="login-form">
+        <input type="text" id="login-username" placeholder="Username" required autocomplete="username">
+        <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
+        <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+      </form>
+      <p id="login-error" class="error hidden"></p>
+      <button class="btn btn-link" id="change-server-btn">Change server</button>
+    </div>
+
+    <!-- Main app -->
+    <div id="app-screen" class="screen hidden">
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="create">Create Ticket</button>
+        <button class="tab" data-tab="queue">Queue</button>
+      </div>
+
+      <!-- Create ticket tab -->
+      <div id="tab-create" class="tab-content">
+        <form id="create-form">
+          <div class="form-group">
+            <label>Title *</label>
+            <input type="text" id="create-title" placeholder="What needs to be done?" required maxlength="255">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="create-description" placeholder="Details (optional)" rows="3" maxlength="50000"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Priority</label>
+              <select id="create-priority">
+                <option value="very low">Very Low</option>
+                <option value="low">Low</option>
+                <option value="default" selected>Default</option>
+                <option value="high">High</option>
+                <option value="very high">Very High</option>
+              </select>
+            </div>
+            <div class="form-group half">
+              <label>Est. Hours</label>
+              <input type="number" id="create-hours" min="0" step="0.25" placeholder="0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="create-due">
+          </div>
+          <div class="form-group">
+            <label>Profile</label>
+            <select id="create-profile"></select>
+          </div>
+          <button type="submit" class="btn btn-primary full-width" id="create-btn">Create Ticket</button>
+        </form>
+        <div id="create-success" class="success hidden">
+          <span>&#10003; Ticket created!</span>
+          <div id="create-game-event" class="game-event hidden"></div>
+        </div>
+        <p id="create-error" class="error hidden"></p>
+      </div>
+
+      <!-- Queue tab -->
+      <div id="tab-queue" class="tab-content hidden">
+        <!-- Profile selector for queue -->
+        <div class="form-group compact">
+          <select id="queue-profile" class="compact-select"></select>
+        </div>
+
+        <div id="queue-loading" class="loading">Loading queue...</div>
+        <div id="queue-empty" class="empty-state hidden">
+          <span class="empty-icon">&#9989;</span>
+          <p>No tickets in queue!</p>
+          <p class="muted">Switch to Create to add one.</p>
+        </div>
+        <div id="queue-ticket" class="ticket-card hidden">
+          <div class="ticket-header">
+            <span class="ticket-id" id="queue-ticket-id"></span>
+            <span class="ticket-priority" id="queue-ticket-priority"></span>
+          </div>
+          <h3 class="ticket-title" id="queue-ticket-title"></h3>
+          <p class="ticket-description" id="queue-ticket-description"></p>
+          <div class="ticket-meta">
+            <span id="queue-ticket-due"></span>
+            <span id="queue-ticket-hours"></span>
+            <span id="queue-ticket-skips"></span>
+          </div>
+          <div class="ticket-actions">
+            <button class="btn btn-complete" id="queue-complete-btn">&#10003; Complete</button>
+            <button class="btn btn-skip" id="queue-skip-btn">&#8594; Skip</button>
+          </div>
+        </div>
+        <div id="queue-game-event" class="game-event hidden"></div>
+        <p id="queue-error" class="error hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

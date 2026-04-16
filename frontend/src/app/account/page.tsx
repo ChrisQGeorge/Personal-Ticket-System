@@ -241,6 +241,81 @@ export default function AccountPage() {
           </div>
         )}
       </div>
+      {/* Chrome Extension */}
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          Chrome Extension
+        </h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Create tickets and work your queue from any browser tab with the PTS
+          Chrome extension. Includes gamification support.
+        </p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/extension/download", { credentials: "include" });
+                  if (!res.ok) throw new Error("Download failed");
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "pts-chrome-extension.zip";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch {
+                  alert("Failed to download extension. Is the server running?");
+                }
+              }}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download Extension
+            </button>
+            <button
+              onClick={() => {
+                const el = document.getElementById("extension-instructions");
+                if (el) el.classList.toggle("hidden");
+              }}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-gray-300 bg-white px-6 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              How to Install
+            </button>
+          </div>
+          <div id="extension-instructions" className="hidden rounded-md bg-gray-50 p-4 text-sm text-gray-700">
+            <p className="mb-2 font-semibold">Installation steps:</p>
+            <ol className="list-inside list-decimal space-y-1.5">
+              <li>Click <strong>Download Extension</strong> above to get the zip file</li>
+              <li>Unzip the downloaded file to a folder on your computer</li>
+              <li>
+                Open{" "}
+                <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono">
+                  chrome://extensions
+                </code>{" "}
+                in your browser
+              </li>
+              <li>
+                Enable <strong>Developer mode</strong> (toggle in top-right)
+              </li>
+              <li>
+                Click <strong>Load unpacked</strong> and select the unzipped{" "}
+                <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono">
+                  pts-chrome-extension
+                </code>{" "}
+                folder
+              </li>
+              <li>
+                Click the PTS icon in your toolbar and enter your server URL
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

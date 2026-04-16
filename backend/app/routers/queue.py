@@ -106,8 +106,10 @@ def skip_ticket(
 ):
     ticket = _verify_ticket_ownership(db, ticket_id, user)
 
+    from datetime import datetime, timezone
     ticket.status = TicketStatus.SKIPPED
     ticket.skip_count += 1
+    ticket.last_skipped_at = datetime.now(timezone.utc)  # Reset effective age
     db.commit()
     db.refresh(ticket)
 

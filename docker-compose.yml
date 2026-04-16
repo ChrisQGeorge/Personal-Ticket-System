@@ -26,6 +26,8 @@ services:
   backend:
     build: ./backend
     container_name: pts_backend
+    volumes:
+      - ./chrome-extension:/app/chrome-extension:ro
     environment:
       DB_HOST: db
       DB_PORT: "3306"

@@ -137,6 +137,7 @@ class Ticket(Base):
     )
     est_hours = Column(Float, nullable=True)
     skip_count = Column(Integer, nullable=False, default=0)
+    last_skipped_at = Column(DateTime, nullable=True)  # Reset effective age on skip
     profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
 
     profile = relationship("Profile", back_populates="tickets")
