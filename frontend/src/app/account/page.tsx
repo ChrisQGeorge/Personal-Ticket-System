@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { changePassword } from "@/lib/api";
+import { changePassword, getGameStats, toggleGamification } from "@/lib/api";
 
 export default function AccountPage() {
   const { user, isAdmin } = useAuth();
@@ -13,6 +13,29 @@ export default function AccountPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [gamificationEnabled, setGamificationEnabled] = useState(false);
+  const [gamificationLoading, setGamificationLoading] = useState(true);
+  const [gamificationToggling, setGamificationToggling] = useState(false);
+
+  useEffect(() => {
+    getGameStats()
+      .then((s) => setGamificationEnabled(s.gamification_enabled))
+      .catch(() => {})
+      .finally(() => setGamificationLoading(false));
+  }, []);
+
+  async function handleToggleGamification() {
+    setGamificationToggling(true);
+    try {
+      const res = await toggleGamification(!gamificationEnabled);
+      setGamificationEnabled(res.gamification_enabled);
+    } catch {
+      // ignore
+    } finally {
+      setGamificationToggling(false);
+    }
+  }
 
   if (!user) return null;
 
@@ -180,6 +203,43 @@ export default function AccountPage() {
             {saving ? "Changing..." : "Change Password"}
           </button>
         </form>
+      </div>
+
+      {/* Gamification toggle */}
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          Gamification
+        </h2>
+        {gamificationLoading ? (
+          <p className="text-sm text-gray-400">Loading...</p>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="font-medium text-gray-900">
+                Enable Task Quest (Gamification)
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Earn XP for completing tickets, build streaks, unlock achievements, and take on daily challenges.
+                Skipping tickets costs XP.
+              </p>
+            </div>
+            <button
+              onClick={handleToggleGamification}
+              disabled={gamificationToggling}
+              className={`relative inline-flex h-7 w-12 min-w-[48px] flex-shrink-0 items-center rounded-full transition-colors ${
+                gamificationEnabled ? "bg-purple-600" : "bg-gray-300"
+              }`}
+              role="switch"
+              aria-checked={gamificationEnabled}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                  gamificationEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

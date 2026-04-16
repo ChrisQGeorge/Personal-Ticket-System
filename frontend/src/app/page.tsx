@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { QueueStats } from "@/lib/types";
-import { getQueueStats } from "@/lib/api";
+import { QueueStats, GameStats } from "@/lib/types";
+import { getQueueStats, getGameStats } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
 
 export default function HomePage() {
@@ -11,6 +11,7 @@ export default function HomePage() {
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [gameStats, setGameStats] = useState<GameStats | null>(null);
 
   const loadStats = useCallback(() => {
     setLoading(true);
@@ -23,6 +24,7 @@ export default function HomePage() {
 
   useEffect(() => {
     loadStats();
+    getGameStats().then(setGameStats).catch(() => {});
   }, [loadStats]);
 
   return (
@@ -82,6 +84,56 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Gamification summary */}
+      {gameStats?.gamification_enabled && (
+        <Link href="/gamification" className="mx-auto block max-w-lg">
+          <div className="rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 p-4 shadow-sm transition-all hover:shadow-md">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 text-sm font-black text-white">
+                  {gameStats.current_level}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-gray-900">
+                    {gameStats.rank_title}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {gameStats.total_xp.toLocaleString()} XP
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                {gameStats.current_streak > 0 && (
+                  <span className="flex items-center gap-1 text-orange-600">
+                    {gameStats.current_streak >= 3 ? "\uD83D\uDD25" : ""} {gameStats.current_streak}
+                  </span>
+                )}
+                {gameStats.combo_count > 0 && (
+                  <span className="flex items-center gap-1 text-blue-600">
+                    {"\u26A1"} {gameStats.combo_count}x
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Mini XP bar */}
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-purple-200/50">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-amber-400 transition-all duration-700"
+                style={{
+                  width: `${
+                    gameStats.xp_for_next_level > gameStats.xp_for_current_level
+                      ? ((gameStats.total_xp - gameStats.xp_for_current_level) /
+                          (gameStats.xp_for_next_level - gameStats.xp_for_current_level)) *
+                        100
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        </Link>
       )}
 
       {/* Quick actions */}

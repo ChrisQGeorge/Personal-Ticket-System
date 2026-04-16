@@ -137,3 +137,67 @@ export interface User {
   is_active: boolean;
   created_at: string;
 }
+
+// Gamification types
+
+export interface GameStats {
+  gamification_enabled: boolean;
+  total_xp: number;
+  current_level: number;
+  xp_for_current_level: number;
+  xp_for_next_level: number;
+  xp_progress: number;
+  rank_title: string;
+  current_streak: number;
+  longest_streak: number;
+  streak_shield_available: boolean;
+  combo_count: number;
+  total_completed: number;
+  total_skipped: number;
+  completion_rate: number;
+  tickets_completed_today: number;
+  achievements: Achievement[];
+  daily_challenges: Challenge[];
+  weekly_challenge: Challenge | null;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  xp: number;
+  unlocked: boolean;
+}
+
+export interface Challenge {
+  id: string;
+  name: string;
+  description: string;
+  target: number;
+  xp: number;
+  progress: number;
+  completed?: boolean;
+}
+
+export interface GameEvent {
+  xp_earned: number;
+  xp_breakdown: Record<string, number>;
+  new_total_xp: number;
+  level: number;
+  leveled_up: boolean;
+  new_level?: number;
+  rank_title: string;
+  streak: number;
+  combo: number;
+  new_achievements: { id: string; name: string; description: string; xp: number }[];
+  challenge_progress: { name: string; progress: number; target: number; completed: boolean }[];
+}
+
+export interface SkipGameEvent {
+  xp_lost: number;
+  new_total_xp: number;
+  level: number;
+  rank_title: string;
+  combo_reset: boolean;
+  weekly_skips: number;
+}

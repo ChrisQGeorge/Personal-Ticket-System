@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from .database import Base, engine
-from .routers import admin, auth, backup, config, imports, profiles, queue, recurring, tickets
+from .routers import admin, auth, backup, config, gamification, imports, profiles, queue, recurring, tickets
 from .services.scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     # Run lightweight migrations for columns added after initial schema
     from sqlalchemy import text, inspect
     from .database import SessionLocal
-    from .models import Profile, QueueConfig, RecurringTemplate, Ticket, User, UserRole
+    from .models import Profile, QueueConfig, RecurringTemplate, Ticket, User, UserGameStats, UserRole
 
     db = SessionLocal()
     try:
@@ -71,6 +71,14 @@ async def lifespan(app: FastAPI):
             db.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"))
             db.commit()
             logger.info("Added token_version column to users table.")
+
+        # Add total_created to user_game_stats if missing
+        if "user_game_stats" in inspector.get_table_names():
+            game_cols = {c["name"] for c in inspector.get_columns("user_game_stats")}
+            if "total_created" not in game_cols:
+                db.execute(text("ALTER TABLE user_game_stats ADD COLUMN total_created INTEGER NOT NULL DEFAULT 0"))
+                db.commit()
+                logger.info("Added total_created column to user_game_stats table.")
 
         # Widen imap_password column if it's too narrow for encrypted values
         try:
@@ -178,6 +186,7 @@ app.include_router(config.router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
 app.include_router(backup.router, prefix="/api")
+app.include_router(gamification.router, prefix="/api")
 
 
 @app.get("/api/health")

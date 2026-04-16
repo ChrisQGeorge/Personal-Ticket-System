@@ -240,3 +240,46 @@ class ProfileResponse(BaseModel):
     has_password: bool = False
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Gamification schemas (Task Quest)
+# ---------------------------------------------------------------------------
+
+class GameStatsResponse(BaseModel):
+    gamification_enabled: bool
+    total_xp: int
+    current_level: int
+    xp_for_current_level: int
+    xp_for_next_level: int
+    xp_progress: int
+    rank_title: str
+    current_streak: int
+    longest_streak: int
+    streak_shield_available: bool
+    combo_count: int
+    total_completed: int
+    total_skipped: int
+    completion_rate: float
+    tickets_completed_today: int
+    achievements: list
+    daily_challenges: list
+    weekly_challenge: Optional[dict] = None
+
+
+class GameEventResponse(BaseModel):
+    xp_earned: int
+    xp_breakdown: dict
+    new_total_xp: int
+    level: int
+    leveled_up: bool
+    new_level: Optional[int] = None
+    rank_title: str
+    streak: int
+    combo: int
+    new_achievements: list
+    challenge_progress: list
+
+
+class ToggleGamificationRequest(BaseModel):
+    enabled: bool

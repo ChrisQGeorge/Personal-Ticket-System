@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { Ticket } from "@/lib/types";
-import { getNextTicket, completeTicket, skipTicket } from "@/lib/api";
+import { Ticket, GameStats, GameEvent, SkipGameEvent } from "@/lib/types";
+import { getNextTicket, completeTicket, skipTicket, getGameStats } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
+import GameEventToast from "@/components/GameEventToast";
 
 export default function QueuePage() {
   const { activeProfile } = useProfile();
@@ -13,6 +14,10 @@ export default function QueuePage() {
   const [acting, setActing] = useState(false);
   const [error, setError] = useState("");
   const [empty, setEmpty] = useState(false);
+
+  // Gamification state
+  const [gameStats, setGameStats] = useState<GameStats | null>(null);
+  const [gameEvent, setGameEvent] = useState<GameEvent | SkipGameEvent | null>(null);
 
   const loadNext = useCallback(async () => {
     setLoading(true);
@@ -33,16 +38,30 @@ export default function QueuePage() {
     }
   }, [activeProfile?.id]);
 
+  const loadGameStats = useCallback(() => {
+    getGameStats()
+      .then(setGameStats)
+      .catch(() => {
+        /* gamification may not be available */
+      });
+  }, []);
+
   useEffect(() => {
     loadNext();
-  }, [loadNext]);
+    loadGameStats();
+  }, [loadNext, loadGameStats]);
 
   async function handleComplete() {
     if (!ticket) return;
     setActing(true);
     setError("");
     try {
-      await completeTicket(ticket.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await completeTicket(ticket.id);
+      if (result?.game_event) {
+        setGameEvent(result.game_event as GameEvent);
+        loadGameStats();
+      }
       const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
@@ -62,7 +81,12 @@ export default function QueuePage() {
     setActing(true);
     setError("");
     try {
-      await skipTicket(ticket.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await skipTicket(ticket.id);
+      if (result?.game_event) {
+        setGameEvent(result.game_event as SkipGameEvent);
+        loadGameStats();
+      }
       const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
@@ -76,6 +100,8 @@ export default function QueuePage() {
       setActing(false);
     }
   }
+
+  const gamificationEnabled = gameStats?.gamification_enabled;
 
   if (loading) {
     return <p className="text-sm text-gray-400">Loading queue...</p>;
@@ -127,6 +153,39 @@ export default function QueuePage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Work Queue</h1>
+
+      {/* Game event toast */}
+      <GameEventToast event={gameEvent} onDismiss={() => setGameEvent(null)} />
+
+      {/* Gamification status bar */}
+      {gamificationEnabled && gameStats && (
+        <div className="mx-auto flex max-w-2xl items-center justify-center gap-4 rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 px-4 py-2 text-sm">
+          <span className="font-semibold text-purple-700">
+            Lv.{gameStats.current_level}
+          </span>
+          <span className="text-gray-400">|</span>
+          {gameStats.current_streak > 0 && (
+            <>
+              <span className="flex items-center gap-1 text-orange-600">
+                {gameStats.current_streak >= 3 ? "\uD83D\uDD25" : ""}{" "}
+                {gameStats.current_streak} streak
+              </span>
+              <span className="text-gray-400">|</span>
+            </>
+          )}
+          {gameStats.combo_count > 0 && (
+            <>
+              <span className="flex items-center gap-1 text-blue-600">
+                {"\u26A1"} {gameStats.combo_count}x combo
+              </span>
+              <span className="text-gray-400">|</span>
+            </>
+          )}
+          <span className="text-amber-600 font-medium">
+            {gameStats.total_xp.toLocaleString()} XP
+          </span>
+        </div>
+      )}
 
       <div className="mx-auto max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         {/* Header */}

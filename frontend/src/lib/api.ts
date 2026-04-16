@@ -11,6 +11,7 @@ import {
   ProfileCreate,
   ProfileUpdate,
   User,
+  GameStats,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -318,6 +319,18 @@ export async function downloadBackup(): Promise<void> {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Gamification
+export async function getGameStats(): Promise<GameStats> {
+  return request<GameStats>("/api/gamification/stats");
+}
+
+export async function toggleGamification(enabled: boolean): Promise<{ gamification_enabled: boolean }> {
+  return request("/api/gamification/toggle", {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
 }
 
 export async function restoreBackup(file: File): Promise<{

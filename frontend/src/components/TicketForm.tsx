@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ticket, TicketCreate, TicketUpdate, Priority, TicketStatus } from "@/lib/types";
+import { Ticket, TicketCreate, TicketUpdate, Priority, TicketStatus, GameEvent } from "@/lib/types";
 import { createTicket, updateTicket, deleteTicket } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
+import GameEventToast from "@/components/GameEventToast";
 
 const PRIORITIES: Priority[] = ["very low", "low", "default", "high", "very high"];
 const STATUSES: TicketStatus[] = ["open", "in-progress", "completed", "skipped"];
@@ -31,6 +32,7 @@ export default function TicketForm({ ticket }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [gameEvent, setGameEvent] = useState<GameEvent | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +72,14 @@ export default function TicketForm({ ticket }: Props) {
           related_ticket_ids: related.length > 0 ? related : undefined,
           profile_id: activeProfile?.id,
         };
-        await createTicket(data);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await createTicket(data);
+        if (result?.game_event) {
+          setGameEvent(result.game_event as GameEvent);
+          // Brief delay to show XP toast before redirecting
+          setTimeout(() => router.push("/tickets"), 1500);
+          return;
+        }
       }
       router.push("/tickets");
     } catch (err: unknown) {
@@ -93,6 +102,8 @@ export default function TicketForm({ ticket }: Props) {
   }
 
   return (
+    <>
+    <GameEventToast event={gameEvent} onDismiss={() => setGameEvent(null)} />
     <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-5">
       {error && (
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -269,5 +280,6 @@ export default function TicketForm({ ticket }: Props) {
         )}
       </div>
     </form>
+    </>
   );
 }

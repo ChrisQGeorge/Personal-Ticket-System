@@ -7,6 +7,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import Priority, Profile, Ticket, TicketStatus, User
 from ..schemas import QueueStatsResponse, QueueTicketResponse, TicketResponse
+from ..services.gamification import process_ticket_completion, process_ticket_skip
 from ..services.queue_service import get_next_ticket
 
 router = APIRouter(prefix="/queue", tags=["queue"])
@@ -63,7 +64,7 @@ def get_next(
     return _ticket_to_response(ticket, score)
 
 
-@router.post("/complete/{ticket_id}", response_model=TicketResponse)
+@router.post("/complete/{ticket_id}")
 def complete_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
@@ -75,23 +76,29 @@ def complete_ticket(
     db.commit()
     db.refresh(ticket)
 
+    # Process gamification (no-op if disabled)
+    game_event = process_ticket_completion(db, user.id, ticket)
+
     related_ids = [t.id for t in ticket.related_tickets]
-    return TicketResponse(
-        id=ticket.id,
-        title=ticket.title,
-        status=ticket.status.value,
-        date_created=ticket.date_created,
-        description=ticket.description,
-        due_date=ticket.due_date,
-        priority=ticket.priority.value,
-        est_hours=ticket.est_hours,
-        skip_count=ticket.skip_count,
-        related_ticket_ids=related_ids,
-        profile_id=ticket.profile_id,
-    )
+    response = {
+        "id": ticket.id,
+        "title": ticket.title,
+        "status": ticket.status.value,
+        "date_created": ticket.date_created.isoformat(),
+        "description": ticket.description,
+        "due_date": ticket.due_date.isoformat() if ticket.due_date else None,
+        "priority": ticket.priority.value,
+        "est_hours": ticket.est_hours,
+        "skip_count": ticket.skip_count,
+        "related_ticket_ids": related_ids,
+        "profile_id": ticket.profile_id,
+    }
+    if game_event:
+        response["game_event"] = game_event
+    return response
 
 
-@router.post("/skip/{ticket_id}", response_model=TicketResponse)
+@router.post("/skip/{ticket_id}")
 def skip_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
@@ -104,20 +111,26 @@ def skip_ticket(
     db.commit()
     db.refresh(ticket)
 
+    # Process gamification (no-op if disabled)
+    game_event = process_ticket_skip(db, user.id)
+
     related_ids = [t.id for t in ticket.related_tickets]
-    return TicketResponse(
-        id=ticket.id,
-        title=ticket.title,
-        status=ticket.status.value,
-        date_created=ticket.date_created,
-        description=ticket.description,
-        due_date=ticket.due_date,
-        priority=ticket.priority.value,
-        est_hours=ticket.est_hours,
-        skip_count=ticket.skip_count,
-        related_ticket_ids=related_ids,
-        profile_id=ticket.profile_id,
-    )
+    response = {
+        "id": ticket.id,
+        "title": ticket.title,
+        "status": ticket.status.value,
+        "date_created": ticket.date_created.isoformat(),
+        "description": ticket.description,
+        "due_date": ticket.due_date.isoformat() if ticket.due_date else None,
+        "priority": ticket.priority.value,
+        "est_hours": ticket.est_hours,
+        "skip_count": ticket.skip_count,
+        "related_ticket_ids": related_ids,
+        "profile_id": ticket.profile_id,
+    }
+    if game_event:
+        response["game_event"] = game_event
+    return response
 
 
 @router.get("/stats", response_model=QueueStatsResponse)

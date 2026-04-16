@@ -200,3 +200,50 @@ class RecurringTemplate(Base):
     due_in_days = Column(Integer, nullable=True)  # e.g., 7 means due 1 week after creation
 
     profile = relationship("Profile", back_populates="recurring_templates")
+
+
+# ---------------------------------------------------------------------------
+# UserGameStats model (Task Quest gamification)
+# ---------------------------------------------------------------------------
+
+class UserGameStats(Base):
+    __tablename__ = "user_game_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    gamification_enabled = Column(Boolean, nullable=False, default=False)
+
+    # XP & Level
+    total_xp = Column(Integer, nullable=False, default=0)
+    current_level = Column(Integer, nullable=False, default=1)
+
+    # Streak
+    current_streak = Column(Integer, nullable=False, default=0)
+    longest_streak = Column(Integer, nullable=False, default=0)
+    last_completion_date = Column(Date, nullable=True)
+    streak_shield_available = Column(Boolean, nullable=False, default=False)
+    streak_shield_used = Column(Boolean, nullable=False, default=False)
+
+    # Combo
+    combo_count = Column(Integer, nullable=False, default=0)
+    combo_last_date = Column(Date, nullable=True)
+
+    # Counters
+    total_completed = Column(Integer, nullable=False, default=0)
+    total_skipped = Column(Integer, nullable=False, default=0)
+    total_created = Column(Integer, nullable=False, default=0)
+    weekly_skips = Column(Integer, nullable=False, default=0)
+    weekly_skips_reset = Column(Date, nullable=True)
+    tickets_completed_today = Column(Integer, nullable=False, default=0)
+    today_date = Column(Date, nullable=True)
+
+    # Achievement tracking (JSON string of unlocked achievement IDs)
+    unlocked_achievements = Column(Text, nullable=False, default="[]")
+
+    # Daily/Weekly challenge tracking (JSON)
+    daily_challenges = Column(Text, nullable=False, default="[]")
+    daily_challenge_date = Column(Date, nullable=True)
+    weekly_challenge = Column(Text, nullable=True)
+    weekly_challenge_date = Column(Date, nullable=True)
+
+    user = relationship("User", backref="game_stats")

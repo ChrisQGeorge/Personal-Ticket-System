@@ -95,12 +95,14 @@ def list_tickets(
     return [_ticket_to_response(t) for t in tickets]
 
 
-@router.post("", response_model=TicketResponse, status_code=201)
+@router.post("", status_code=201)
 def create_ticket(
     payload: TicketCreate,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    from ..services.gamification import process_ticket_creation
+
     if payload.priority and payload.priority not in VALID_PRIORITIES:
         raise HTTPException(400, f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
 
@@ -128,7 +130,12 @@ def create_ticket(
 
     db.commit()
     db.refresh(ticket)
-    return _ticket_to_response(ticket)
+
+    response = _ticket_to_response(ticket).model_dump()
+    game_event = process_ticket_creation(db, user.id, ticket)
+    if game_event:
+        response["game_event"] = game_event
+    return response
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)

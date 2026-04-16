@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useProfile } from "@/lib/profile-context";
 import { useAuth } from "@/lib/auth-context";
+import { GameStats } from "@/lib/types";
+import { getGameStats } from "@/lib/api";
 
 interface NavLink {
   href: string;
@@ -28,6 +30,13 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { activeProfile } = useProfile();
   const { user, isAdmin, handleLogout } = useAuth();
+  const [gameStats, setGameStats] = useState<GameStats | null>(null);
+
+  useEffect(() => {
+    getGameStats()
+      .then(setGameStats)
+      .catch(() => {});
+  }, [pathname]);
 
   const visibleLinks = links.filter((l) => !l.adminOnly || isAdmin);
 
@@ -71,6 +80,30 @@ export default function Navbar() {
                 {l.label}
               </Link>
             ))}
+
+            {/* Quest link */}
+            <Link
+              href="/gamification"
+              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                isActive("/gamification")
+                  ? "bg-indigo-900 text-white"
+                  : "text-indigo-100 hover:bg-indigo-600"
+              }`}
+            >
+              Quest
+            </Link>
+
+            {/* Game stats badge */}
+            {gameStats?.gamification_enabled && (
+              <Link
+                href="/gamification"
+                className="flex items-center gap-1.5 rounded-full bg-indigo-800/60 px-2.5 py-1 text-xs font-medium text-amber-300 transition-colors hover:bg-indigo-800"
+              >
+                <span className="font-bold">Lv.{gameStats.current_level}</span>
+                <span className="text-indigo-300">|</span>
+                <span>{gameStats.total_xp.toLocaleString()} XP</span>
+              </Link>
+            )}
 
             {/* User info + logout */}
             <div className="ml-3 flex items-center gap-2 border-l border-indigo-500 pl-3">
@@ -155,6 +188,24 @@ export default function Navbar() {
               {l.label}
             </Link>
           ))}
+
+          {/* Quest link mobile */}
+          <Link
+            href="/gamification"
+            onClick={() => setOpen(false)}
+            className={`block min-h-[44px] px-4 py-3 text-sm font-medium ${
+              isActive("/gamification")
+                ? "bg-indigo-900 text-white"
+                : "text-indigo-100 hover:bg-indigo-600"
+            }`}
+          >
+            Quest
+            {gameStats?.gamification_enabled && (
+              <span className="ml-2 text-xs text-amber-300">
+                Lv.{gameStats.current_level}
+              </span>
+            )}
+          </Link>
 
           {/* Mobile user info */}
           <div className="mt-2 border-t border-indigo-600 pt-2">

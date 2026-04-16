@@ -5,3 +5,40 @@
 body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
+
+/* Gamification animations */
+@keyframes toast-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-slide-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+@keyframes xp-bar-fill {
+  from { width: 0%; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(234,179,8,0.3); }
+  50% { box-shadow: 0 0 20px rgba(234,179,8,0.6); }
+}
+@keyframes level-up-flash {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.animate-toast-in {
+  animation: toast-slide-in 0.4s ease-out forwards;
+}
+.animate-toast-out {
+  animation: toast-slide-out 0.3s ease-in forwards;
+}
+.animate-xp-fill {
+  animation: xp-bar-fill 1s ease-out forwards;
+}
+.animate-glow {
+  animation: pulse-glow 2s infinite;
+}
+.animate-level-up {
+  animation: level-up-flash 0.6s ease-in-out;
+}
