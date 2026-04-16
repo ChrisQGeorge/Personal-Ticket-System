@@ -7,8 +7,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user, require_admin
 from ..database import get_db
-from ..models import Profile, QueueConfig, RecurringTemplate, Ticket
+from ..models import Profile, QueueConfig, RecurringTemplate, Ticket, User, UserRole
 
 router = APIRouter(tags=["backup"])
 
@@ -25,6 +26,7 @@ def _serialize_profile(p: Profile) -> dict:
         "id": p.id,
         "name": p.name,
         "color": p.color,
+        "user_id": p.user_id,
         "imap_host": p.imap_host,
         "imap_port": p.imap_port,
         "imap_user": p.imap_user,
@@ -84,21 +86,43 @@ def _serialize_config(c: QueueConfig) -> dict:
 
 
 @router.get("/backup")
-def download_backup(db: Session = Depends(get_db)):
-    """Export all data as a downloadable JSON file."""
-    profiles = db.query(Profile).all()
-    tickets = db.query(Ticket).all()
-    templates = db.query(RecurringTemplate).all()
+def download_backup(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Export user's data as a downloadable JSON file. Admins get all data."""
+    if user.role == UserRole.ADMIN:
+        profiles = db.query(Profile).all()
+    else:
+        profiles = db.query(Profile).filter(Profile.user_id == user.id).all()
+
+    profile_ids = [p.id for p in profiles]
+
+    tickets = db.query(Ticket).filter(Ticket.profile_id.in_(profile_ids)).all() if profile_ids else []
+    templates = db.query(RecurringTemplate).filter(RecurringTemplate.profile_id.in_(profile_ids)).all() if profile_ids else []
     config = db.query(QueueConfig).filter(QueueConfig.id == 1).first()
 
-    relationships = db.execute(
-        text("SELECT source_ticket_id, related_ticket_id FROM ticket_relationships")
-    ).fetchall()
+    # Get relationships for the user's tickets
+    ticket_ids = [t.id for t in tickets]
+    if ticket_ids:
+        from ..models import ticket_relationships as tr_table
+        relationships = db.execute(
+            tr_table.select().where(tr_table.c.source_ticket_id.in_(ticket_ids))
+        ).fetchall()
+    else:
+        relationships = []
+
+    serialized_profiles = [_serialize_profile(p) for p in profiles]
+
+    # Strip IMAP passwords for non-admin users
+    if user.role != UserRole.ADMIN:
+        for p in serialized_profiles:
+            p.pop("imap_password", None)
 
     backup = {
         "version": 1,
         "exported_at": datetime.utcnow().isoformat(),
-        "profiles": [_serialize_profile(p) for p in profiles],
+        "profiles": serialized_profiles,
         "tickets": [_serialize_ticket(t) for t in tickets],
         "recurring_templates": [_serialize_template(t) for t in templates],
         "ticket_relationships": [
@@ -122,10 +146,15 @@ def download_backup(db: Session = Depends(get_db)):
 
 @router.post("/backup/restore")
 async def restore_backup(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Restore all data from a backup JSON file. WARNING: This clears existing data."""
+    """Restore data from a backup JSON file into the current user's account."""
+    MAX_BACKUP_SIZE = 50 * 1024 * 1024  # 50MB
     contents = await file.read()
+    if len(contents) > MAX_BACKUP_SIZE:
+        raise HTTPException(400, "Backup file too large. Maximum size is 50MB.")
     try:
         data = json.loads(contents)
     except json.JSONDecodeError:
@@ -137,20 +166,37 @@ async def restore_backup(
     try:
         db.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
 
-        # Clear existing data
-        db.execute(text("DELETE FROM ticket_relationships"))
-        db.execute(text("DELETE FROM tickets"))
-        db.execute(text("DELETE FROM recurring_templates"))
-        db.execute(text("DELETE FROM profiles"))
-        db.execute(text("DELETE FROM queue_config"))
+        # Get current user's profile IDs to scope deletion
+        user_profile_ids = [
+            p.id for p in db.query(Profile).filter(Profile.user_id == user.id).all()
+        ]
+
+        if user_profile_ids:
+            # Delete relationships for user's tickets
+            user_ticket_ids = [
+                t.id for t in db.query(Ticket).filter(Ticket.profile_id.in_(user_profile_ids)).all()
+            ]
+            if user_ticket_ids:
+                from ..models import ticket_relationships as tr_table
+                db.execute(
+                    tr_table.delete().where(
+                        tr_table.c.source_ticket_id.in_(user_ticket_ids)
+                        | tr_table.c.related_ticket_id.in_(user_ticket_ids)
+                    )
+                )
+            # Delete user's tickets, templates, profiles
+            db.query(Ticket).filter(Ticket.profile_id.in_(user_profile_ids)).delete(synchronize_session=False)
+            db.query(RecurringTemplate).filter(RecurringTemplate.profile_id.in_(user_profile_ids)).delete(synchronize_session=False)
+            db.query(Profile).filter(Profile.id.in_(user_profile_ids)).delete(synchronize_session=False)
         db.commit()
 
-        # Restore profiles
+        # Restore profiles (assign to current user)
+        old_to_new_profile = {}
         for p in data.get("profiles", []):
             profile = Profile(
-                id=p["id"],
                 name=p["name"],
                 color=p.get("color", "#6366f1"),
+                user_id=user.id,
                 imap_host=p.get("imap_host"),
                 imap_port=p.get("imap_port"),
                 imap_user=p.get("imap_user"),
@@ -159,12 +205,15 @@ async def restore_backup(
                 email_enabled=p.get("email_enabled", False),
             )
             db.add(profile)
+            db.flush()
+            old_to_new_profile[p["id"]] = profile.id
         db.commit()
 
-        # Restore tickets
+        # Restore tickets (map old profile_id to new)
+        old_to_new_ticket = {}
         for t in data.get("tickets", []):
+            new_profile_id = old_to_new_profile.get(t.get("profile_id"))
             ticket = Ticket(
-                id=t["id"],
                 title=t["title"],
                 status=t.get("status", "open"),
                 date_created=(
@@ -181,15 +230,17 @@ async def restore_backup(
                 priority=t.get("priority", "default"),
                 est_hours=t.get("est_hours"),
                 skip_count=t.get("skip_count", 0),
-                profile_id=t.get("profile_id"),
+                profile_id=new_profile_id,
             )
             db.add(ticket)
+            db.flush()
+            old_to_new_ticket[t["id"]] = ticket.id
         db.commit()
 
         # Restore recurring templates
         for t in data.get("recurring_templates", []):
+            new_profile_id = old_to_new_profile.get(t.get("profile_id"))
             template = RecurringTemplate(
-                id=t["id"],
                 title=t["title"],
                 description=t.get("description"),
                 priority=t.get("priority", "default"),
@@ -212,64 +263,52 @@ async def restore_backup(
                     if t.get("next_fire")
                     else None
                 ),
-                profile_id=t.get("profile_id"),
+                profile_id=new_profile_id,
                 due_in_days=t.get("due_in_days"),
             )
             db.add(template)
         db.commit()
 
-        # Restore ticket relationships
+        # Restore ticket relationships (map old IDs to new)
         for r in data.get("ticket_relationships", []):
-            db.execute(
-                text(
-                    "INSERT INTO ticket_relationships (source_ticket_id, related_ticket_id) "
-                    "VALUES (:s, :r)"
-                ),
-                {"s": r["source_ticket_id"], "r": r["related_ticket_id"]},
-            )
+            new_source = old_to_new_ticket.get(r["source_ticket_id"])
+            new_related = old_to_new_ticket.get(r["related_ticket_id"])
+            if new_source and new_related:
+                db.execute(
+                    text(
+                        "INSERT INTO ticket_relationships (source_ticket_id, related_ticket_id) "
+                        "VALUES (:s, :r)"
+                    ),
+                    {"s": new_source, "r": new_related},
+                )
         db.commit()
 
-        # Restore queue config
-        if data.get("queue_config"):
+        # Restore queue config if admin
+        if user.role == UserRole.ADMIN and data.get("queue_config"):
             cfg = data["queue_config"]
-            config = QueueConfig(
-                id=1,
-                age_weight=cfg.get("age_weight", 10.0),
-                skip_weight=cfg.get("skip_weight", 15.0),
-                effort_weight=cfg.get("effort_weight", 5.0),
-                due_date_weight=cfg.get("due_date_weight", 3.0),
-                overdue_penalty=cfg.get("overdue_penalty", -100.0),
-                priority_very_high=cfg.get("priority_very_high", -40.0),
-                priority_high=cfg.get("priority_high", -20.0),
-                priority_default=cfg.get("priority_default", 0.0),
-                priority_low=cfg.get("priority_low", 20.0),
-                priority_very_low=cfg.get("priority_very_low", 40.0),
-            )
-            db.add(config)
+            config = db.query(QueueConfig).filter(QueueConfig.id == 1).first()
+            if config:
+                for key in ("age_weight", "skip_weight", "effort_weight", "due_date_weight",
+                            "overdue_penalty", "priority_very_high", "priority_high",
+                            "priority_default", "priority_low", "priority_very_low"):
+                    if key in cfg:
+                        setattr(config, key, cfg[key])
+            else:
+                config = QueueConfig(
+                    id=1,
+                    age_weight=cfg.get("age_weight", 10.0),
+                    skip_weight=cfg.get("skip_weight", 15.0),
+                    effort_weight=cfg.get("effort_weight", 5.0),
+                    due_date_weight=cfg.get("due_date_weight", 3.0),
+                    overdue_penalty=cfg.get("overdue_penalty", -100.0),
+                    priority_very_high=cfg.get("priority_very_high", -40.0),
+                    priority_high=cfg.get("priority_high", -20.0),
+                    priority_default=cfg.get("priority_default", 0.0),
+                    priority_low=cfg.get("priority_low", 20.0),
+                    priority_very_low=cfg.get("priority_very_low", 40.0),
+                )
+                db.add(config)
             db.commit()
-
-        # Reset auto-increment counters
-        max_ticket_id = max(
-            (t["id"] for t in data.get("tickets", [])), default=0
-        )
-        max_template_id = max(
-            (t["id"] for t in data.get("recurring_templates", [])), default=0
-        )
-        max_profile_id = max(
-            (p["id"] for p in data.get("profiles", [])), default=0
-        )
-        db.execute(
-            text(f"ALTER TABLE tickets AUTO_INCREMENT = {max_ticket_id + 1}")
-        )
-        db.execute(
-            text(
-                f"ALTER TABLE recurring_templates AUTO_INCREMENT = {max_template_id + 1}"
-            )
-        )
-        db.execute(
-            text(f"ALTER TABLE profiles AUTO_INCREMENT = {max_profile_id + 1}")
-        )
-        db.commit()
 
         db.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
         db.commit()

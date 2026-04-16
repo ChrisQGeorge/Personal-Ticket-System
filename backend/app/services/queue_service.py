@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..models import Priority, QueueConfig, Ticket, TicketStatus
+from ..models import Priority, Profile, QueueConfig, Ticket, TicketStatus
 
 
 def _get_config(db: Session) -> QueueConfig:
@@ -59,10 +59,16 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
     return score
 
 
-def get_next_ticket(db: Session, profile_id: Optional[int] = None) -> Optional[Tuple[Ticket, float]]:
+def get_next_ticket(
+    db: Session,
+    profile_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Optional[Tuple[Ticket, float]]:
     """Return the highest-priority ticket (lowest score) from the queue."""
     config = _get_config(db)
     query = db.query(Ticket).filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
+    if user_id is not None:
+        query = query.join(Profile).filter(Profile.user_id == user_id)
     if profile_id is not None:
         query = query.filter(Ticket.profile_id == profile_id)
     tickets = query.all()
@@ -76,10 +82,16 @@ def get_next_ticket(db: Session, profile_id: Optional[int] = None) -> Optional[T
     return scored[0]
 
 
-def get_all_scored(db: Session, profile_id: Optional[int] = None) -> List[Tuple[Ticket, float]]:
+def get_all_scored(
+    db: Session,
+    profile_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> List[Tuple[Ticket, float]]:
     """Return all non-completed tickets with their scores, sorted."""
     config = _get_config(db)
     query = db.query(Ticket).filter(Ticket.status.notin_([TicketStatus.COMPLETED]))
+    if user_id is not None:
+        query = query.join(Profile).filter(Profile.user_id == user_id)
     if profile_id is not None:
         query = query.filter(Ticket.profile_id == profile_id)
     tickets = query.all()

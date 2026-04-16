@@ -44,6 +44,28 @@ class Frequency(str, enum.Enum):
     MONTHLY = "monthly"
 
 
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    USER = "user"
+
+
+# ---------------------------------------------------------------------------
+# User model
+# ---------------------------------------------------------------------------
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(100), nullable=False, unique=True)
+    password_hash = Column(String(512), nullable=False)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    profiles = relationship("Profile", back_populates="user")
+
+
 # ---------------------------------------------------------------------------
 # Profile model
 # ---------------------------------------------------------------------------
@@ -52,16 +74,18 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), nullable=False, unique=True)
+    name = Column(String(100), nullable=False)
     color = Column(String(7), nullable=False, default="#6366f1")  # hex color for UI
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # IMAP email config (optional)
     imap_host = Column(String(255), nullable=True)
     imap_port = Column(Integer, nullable=True, default=993)
     imap_user = Column(String(255), nullable=True)
-    imap_password = Column(String(255), nullable=True)
+    imap_password = Column(String(512), nullable=True)
     imap_use_ssl = Column(Boolean, nullable=False, default=True)
     email_enabled = Column(Boolean, nullable=False, default=False)
 
+    user = relationship("User", back_populates="profiles")
     tickets = relationship("Ticket", back_populates="profile")
     recurring_templates = relationship("RecurringTemplate", back_populates="profile")
 

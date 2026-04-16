@@ -5,12 +5,43 @@ from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
+# Auth schemas
+# ---------------------------------------------------------------------------
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=8, max_length=256)
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class UserUpdateRole(BaseModel):
+    role: str  # "admin" or "user"
+
+
+class UserUpdateActive(BaseModel):
+    is_active: bool
+
+
+# ---------------------------------------------------------------------------
 # Ticket schemas
 # ---------------------------------------------------------------------------
 
 class TicketBase(BaseModel):
     title: str = Field(..., max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=50000)
     due_date: Optional[date] = None
     priority: str = "default"
     est_hours: Optional[float] = None
@@ -23,7 +54,7 @@ class TicketCreate(TicketBase):
 
 class TicketUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=50000)
     due_date: Optional[date] = None
     priority: Optional[str] = None
     est_hours: Optional[float] = None
@@ -101,7 +132,7 @@ class QueueConfigUpdate(BaseModel):
 
 class RecurringTemplateBase(BaseModel):
     title: str = Field(..., max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=50000)
     priority: str = "default"
     est_hours: Optional[float] = None
     frequency: str
@@ -116,7 +147,7 @@ class RecurringTemplateCreate(RecurringTemplateBase):
 
 class RecurringTemplateUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=50000)
     priority: Optional[str] = None
     est_hours: Optional[float] = None
     active: Optional[bool] = None
@@ -155,8 +186,8 @@ class ProfileCreate(BaseModel):
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
-    color: Optional[str] = None
-    imap_host: Optional[str] = None
+    color: Optional[str] = Field(None, max_length=7)
+    imap_host: Optional[str] = Field(None, max_length=255)
     imap_port: Optional[int] = None
     imap_user: Optional[str] = None
     imap_password: Optional[str] = None
@@ -168,6 +199,7 @@ class ProfileResponse(BaseModel):
     id: int
     name: str
     color: str
+    user_id: Optional[int] = None
     imap_host: Optional[str] = None
     imap_port: Optional[int] = None
     imap_user: Optional[str] = None

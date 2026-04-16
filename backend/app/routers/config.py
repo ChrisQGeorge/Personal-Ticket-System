@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..auth import require_admin
 from ..database import get_db
-from ..models import QueueConfig
+from ..models import QueueConfig, User
 from ..schemas import QueueConfigResponse, QueueConfigUpdate
 
 router = APIRouter(tags=["config"])
@@ -20,13 +21,13 @@ def _get_or_create_config(db: Session) -> QueueConfig:
 
 
 @router.get("/config", response_model=QueueConfigResponse)
-def get_config(db: Session = Depends(get_db)):
+def get_config(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     """Return the current queue weight configuration."""
     return _get_or_create_config(db)
 
 
 @router.put("/config", response_model=QueueConfigResponse)
-def update_config(payload: QueueConfigUpdate, db: Session = Depends(get_db)):
+def update_config(payload: QueueConfigUpdate, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     """Update queue weight configuration with the provided fields."""
     config = _get_or_create_config(db)
     update_data = payload.model_dump(exclude_unset=True)
@@ -38,7 +39,7 @@ def update_config(payload: QueueConfigUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/config/reset", response_model=QueueConfigResponse)
-def reset_config(db: Session = Depends(get_db)):
+def reset_config(db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     """Reset queue weight configuration back to defaults."""
     config = _get_or_create_config(db)
     defaults = QueueConfig(id=1)

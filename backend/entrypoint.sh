@@ -8,14 +8,13 @@ RETRY_COUNT=0
 
 while ! python -c "
 import pymysql, os
-url = os.getenv('DATABASE_URL', 'mysql+pymysql://pts_user:pts_pass_2024@db:3306/pts_db')
-# parse host, port, user, password, db from URL
-parts = url.split('://')[1]
-creds, rest = parts.split('@')
-user, password = creds.split(':')
-hostport, dbname = rest.split('/')
-host, port = hostport.split(':')
-conn = pymysql.connect(host=host, port=int(port), user=user, password=password, database=dbname)
+conn = pymysql.connect(
+    host=os.getenv('DB_HOST', 'db'),
+    port=int(os.getenv('DB_PORT', '3306')),
+    user=os.getenv('DB_USER', 'pts_user'),
+    password=os.getenv('DB_PASS', 'pts_pass_2024'),
+    database=os.getenv('DB_NAME', 'pts_db'),
+)
 conn.close()
 " 2>/dev/null; do
     RETRY_COUNT=$((RETRY_COUNT + 1))

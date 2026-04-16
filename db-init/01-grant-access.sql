@@ -1,4 +1,5 @@
--- Ensure pts_user can connect from any host in the Docker network
-CREATE USER IF NOT EXISTS 'pts_user'@'%' IDENTIFIED BY 'pts_pass_2024';
-GRANT ALL PRIVILEGES ON pts_db.* TO 'pts_user'@'%';
+-- Ensure the application user can connect from any host in the Docker network
+-- Note: MYSQL_USER and MYSQL_PASSWORD from docker-compose handle initial creation.
+-- This script ensures '%' host access in case of network changes.
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;

@@ -129,3 +129,11 @@ export interface ProfileUpdate {
   imap_use_ssl?: boolean;
   email_enabled?: boolean;
 }
+
+export interface User {
+  id: number;
+  username: string;
+  role: "admin" | "user";
+  is_active: boolean;
+  created_at: string;
+}

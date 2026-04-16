@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(docker-compose up *)",
-      "Bash(curl -s http://localhost:8000/api/health)"
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(bash setup.sh --force)",
+      "Bash(docker-compose down *)",
+      "Bash(docker volume *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/auth/me)",
+      "Bash(curl -s http://127.0.0.1:9999/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:9999/api/auth/me)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:9999/api/tickets)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:9999/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST http://127.0.0.1:9999/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"test\",\"password\":\"wrong\"}')",
+      "Bash(curl -s -I http://127.0.0.1:9999/api/health)"
     ]
   }
 }

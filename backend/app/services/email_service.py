@@ -4,6 +4,7 @@ import logging
 from email.header import decode_header
 from html.parser import HTMLParser
 
+from ..auth import decrypt_value
 from ..database import SessionLocal
 from ..models import Profile, Ticket
 
@@ -82,12 +83,13 @@ def check_profile_email(profile_id: int) -> None:
             return
 
         # Connect to IMAP
+        password = decrypt_value(profile.imap_password)
         if profile.imap_use_ssl:
             mail = imaplib.IMAP4_SSL(profile.imap_host, profile.imap_port or 993)
         else:
             mail = imaplib.IMAP4(profile.imap_host, profile.imap_port or 143)
 
-        mail.login(profile.imap_user, profile.imap_password)
+        mail.login(profile.imap_user, password)
         mail.select("INBOX")
 
         # Search for unread/unseen messages

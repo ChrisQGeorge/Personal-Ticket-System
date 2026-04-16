@@ -9,8 +9,9 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
-from ..models import Ticket
+from ..models import Profile, Ticket, User
 
 router = APIRouter(tags=["import"])
 
@@ -123,13 +124,23 @@ async def import_tickets(
     file: UploadFile = File(...),
     profile_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Import tickets from a CSV or Excel file."""
+    # Verify profile ownership if profile_id provided
+    if profile_id is not None:
+        profile = db.query(Profile).filter(Profile.id == profile_id, Profile.user_id == user.id).first()
+        if not profile:
+            raise HTTPException(status_code=403, detail="Profile does not belong to you")
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided.")
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
 
     if ext == "csv":
         try:
@@ -180,7 +191,7 @@ async def import_tickets(
 
 
 @router.get("/import/template")
-def download_template():
+def download_template(user: User = Depends(get_current_user)):
     """Download an Excel template for importing tickets."""
     wb = Workbook()
     ws = wb.active

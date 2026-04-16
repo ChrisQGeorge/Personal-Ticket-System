@@ -10,6 +10,7 @@ import {
   Profile,
   ProfileCreate,
   ProfileUpdate,
+  User,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -20,6 +21,7 @@ async function request<T>(
 ): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
@@ -174,8 +176,9 @@ export async function importTickets(file: File, profileId?: number): Promise<{ i
   const formData = new FormData();
   formData.append("file", file);
   if (profileId != null) formData.append("profile_id", String(profileId));
-  const res = await fetch("/api/import", {
+  const res = await fetch(`${BASE}/api/import`, {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
   if (!res.ok) {
@@ -186,7 +189,7 @@ export async function importTickets(file: File, profileId?: number): Promise<{ i
 }
 
 export function getTemplateUrl(): string {
-  return "/api/import/template";
+  return `${BASE}/api/import/template`;
 }
 
 // Profiles
@@ -222,9 +225,67 @@ export async function testProfileEmail(id: number): Promise<{ success: boolean; 
   });
 }
 
+// Auth
+export async function login(
+  username: string,
+  password: string
+): Promise<{ message: string; user: User }> {
+  return request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function register(
+  username: string,
+  password: string
+): Promise<{ message: string; user: User }> {
+  return request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function logout(): Promise<void> {
+  await request("/api/auth/logout", { method: "POST" });
+}
+
+export async function getMe(): Promise<User> {
+  return request("/api/auth/me");
+}
+
+// Admin
+export async function listUsers(): Promise<User[]> {
+  return request("/api/admin/users");
+}
+
+export async function updateUserRole(
+  id: number,
+  role: string
+): Promise<User> {
+  return request(`/api/admin/users/${id}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function updateUserActive(
+  id: number,
+  is_active: boolean
+): Promise<User> {
+  return request(`/api/admin/users/${id}/active`, {
+    method: "PUT",
+    body: JSON.stringify({ is_active }),
+  });
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  return request(`/api/admin/users/${id}`, { method: "DELETE" });
+}
+
 // Backup
 export function getBackupUrl(): string {
-  return "/api/backup";
+  return `${BASE}/api/backup`;
 }
 
 export async function restoreBackup(file: File): Promise<{
@@ -236,8 +297,9 @@ export async function restoreBackup(file: File): Promise<{
 }> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch("/api/backup/restore", {
+  const res = await fetch(`${BASE}/api/backup/restore`, {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
   if (!res.ok) {

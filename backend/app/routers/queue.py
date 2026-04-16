@@ -3,8 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
-from ..models import Priority, Ticket, TicketStatus
+from ..models import Priority, Profile, Ticket, TicketStatus, User
 from ..schemas import QueueStatsResponse, QueueTicketResponse, TicketResponse
 from ..services.queue_service import get_next_ticket
 
@@ -29,9 +30,26 @@ def _ticket_to_response(ticket: Ticket, score: float = 0.0) -> QueueTicketRespon
     )
 
 
+def _verify_ticket_ownership(db: Session, ticket_id: int, user: User) -> Ticket:
+    """Verify that the given ticket belongs to a profile owned by the current user."""
+    ticket = (
+        db.query(Ticket)
+        .join(Profile)
+        .filter(Ticket.id == ticket_id, Profile.user_id == user.id)
+        .first()
+    )
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
+
+
 @router.get("/next", response_model=QueueTicketResponse)
-def get_next(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    result = get_next_ticket(db, profile_id=profile_id)
+def get_next(
+    profile_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = get_next_ticket(db, profile_id=profile_id, user_id=user.id)
     if result is None:
         raise HTTPException(status_code=404, detail="No tickets in queue")
     ticket, score = result
@@ -46,10 +64,12 @@ def get_next(profile_id: Optional[int] = Query(None), db: Session = Depends(get_
 
 
 @router.post("/complete/{ticket_id}", response_model=TicketResponse)
-def complete_ticket(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+def complete_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    ticket = _verify_ticket_ownership(db, ticket_id, user)
 
     ticket.status = TicketStatus.COMPLETED
     db.commit()
@@ -72,10 +92,12 @@ def complete_ticket(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/skip/{ticket_id}", response_model=TicketResponse)
-def skip_ticket(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+def skip_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    ticket = _verify_ticket_ownership(db, ticket_id, user)
 
     ticket.status = TicketStatus.SKIPPED
     ticket.skip_count += 1
@@ -99,8 +121,12 @@ def skip_ticket(ticket_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/stats", response_model=QueueStatsResponse)
-def get_stats(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    base_query = db.query(Ticket)
+def get_stats(
+    profile_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    base_query = db.query(Ticket).join(Profile).filter(Profile.user_id == user.id)
     if profile_id is not None:
         base_query = base_query.filter(Ticket.profile_id == profile_id)
 

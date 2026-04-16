@@ -4,8 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
-from ..models import Frequency, Priority, RecurringTemplate
+from ..models import Frequency, Priority, Profile, RecurringTemplate, User
 from ..schemas import (
     RecurringTemplateCreate,
     RecurringTemplateResponse,
@@ -30,20 +31,58 @@ def _template_to_response(template: RecurringTemplate) -> RecurringTemplateRespo
         last_fired=template.last_fired,
         next_fire=template.next_fire,
         profile_id=template.profile_id,
+        due_in_days=template.due_in_days,
     )
 
 
+def _verify_profile_ownership(db: Session, profile_id: int, user: User):
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile or profile.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Profile does not belong to you")
+    return profile
+
+
+def _verify_template_ownership(db: Session, template_id: int, user: User) -> RecurringTemplate:
+    template = (
+        db.query(RecurringTemplate)
+        .join(Profile)
+        .filter(RecurringTemplate.id == template_id, Profile.user_id == user.id)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
 @router.get("", response_model=list[RecurringTemplateResponse])
-def list_templates(profile_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    query = db.query(RecurringTemplate)
+def list_templates(
+    profile_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    query = db.query(RecurringTemplate).join(Profile).filter(Profile.user_id == user.id)
     if profile_id is not None:
+        _verify_profile_ownership(db, profile_id, user)
         query = query.filter(RecurringTemplate.profile_id == profile_id)
     templates = query.all()
     return [_template_to_response(t) for t in templates]
 
 
 @router.post("", response_model=RecurringTemplateResponse, status_code=201)
-def create_template(payload: RecurringTemplateCreate, db: Session = Depends(get_db)):
+def create_template(
+    payload: RecurringTemplateCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if payload.profile_id is not None:
+        _verify_profile_ownership(db, payload.profile_id, user)
+        profile_id = payload.profile_id
+    else:
+        default_profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+        if not default_profile:
+            raise HTTPException(400, "No profile found. Create a profile first.")
+        profile_id = default_profile.id
+
     template = RecurringTemplate(
         title=payload.title,
         description=payload.description,
@@ -52,7 +91,8 @@ def create_template(payload: RecurringTemplateCreate, db: Session = Depends(get_
         frequency=payload.frequency,
         interval_count=payload.interval_count,
         start_date=payload.start_date,
-        profile_id=payload.profile_id,
+        profile_id=profile_id,
+        due_in_days=payload.due_in_days,
     )
     # Compute initial next_fire
     template.next_fire = compute_next_fire(template)
@@ -63,10 +103,12 @@ def create_template(payload: RecurringTemplateCreate, db: Session = Depends(get_
 
 
 @router.get("/{template_id}", response_model=RecurringTemplateResponse)
-def get_template(template_id: int, db: Session = Depends(get_db)):
-    template = db.query(RecurringTemplate).filter(RecurringTemplate.id == template_id).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+def get_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    template = _verify_template_ownership(db, template_id, user)
     return _template_to_response(template)
 
 
@@ -75,10 +117,9 @@ def update_template(
     template_id: int,
     payload: RecurringTemplateUpdate,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    template = db.query(RecurringTemplate).filter(RecurringTemplate.id == template_id).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+    template = _verify_template_ownership(db, template_id, user)
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -95,10 +136,12 @@ def update_template(
 
 
 @router.delete("/{template_id}", status_code=204)
-def delete_template(template_id: int, db: Session = Depends(get_db)):
-    template = db.query(RecurringTemplate).filter(RecurringTemplate.id == template_id).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    template = _verify_template_ownership(db, template_id, user)
     db.delete(template)
     db.commit()
     return None

@@ -3,11 +3,11 @@ services:
     image: mysql:8.0
     container_name: pts_db
     environment:
-      MYSQL_ROOT_PASSWORD: pts_root_s3cret
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_ROOT_HOST: "%"
-      MYSQL_DATABASE: pts_db
-      MYSQL_USER: pts_user
-      MYSQL_PASSWORD: pts_pass_2024
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pts_db}
+      MYSQL_USER: ${MYSQL_USER:-pts_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - pts_mysql_data:/var/lib/mysql
       - ./db-init:/docker-entrypoint-initdb.d
@@ -27,7 +27,16 @@ services:
     build: ./backend
     container_name: pts_backend
     environment:
-      DATABASE_URL: "mysql+pymysql://pts_user:pts_pass_2024@db:3306/pts_db"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: ${DB_USER:-pts_user}
+      DB_PASS: ${DB_PASS:-${MYSQL_PASSWORD}}
+      DB_NAME: ${DB_NAME:-pts_db}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +50,7 @@ services:
     build: ./frontend
     container_name: pts_frontend
     environment:
-      BACKEND_URL: "http://backend:8000"
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
     ports:
       - "3000:3000"
     depends_on:

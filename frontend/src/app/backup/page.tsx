@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { getBackupUrl, restoreBackup } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
+import { useAuth } from "@/lib/auth-context";
 
 interface RestoreResult {
   restored: boolean;
@@ -13,6 +14,7 @@ interface RestoreResult {
 }
 
 export default function BackupPage() {
+  const { user, isAdmin } = useAuth();
   const { refreshProfiles } = useProfile();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -76,11 +78,19 @@ export default function BackupPage() {
   return (
     <div className="mx-auto max-w-2xl py-8">
       {/* Backup Section */}
-      <h1 className="mb-2 text-2xl font-bold text-gray-900">Backup</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Download a complete backup of all your data including profiles, tickets,
+      <h1 className="mb-2 text-2xl font-bold text-gray-900">
+        Backup {user ? `\u2014 ${user.username}'s Data` : ""}
+      </h1>
+      <p className="mb-4 text-sm text-gray-500">
+        Download a complete backup of your data including profiles, tickets,
         recurring templates, and settings.
       </p>
+
+      {isAdmin && (
+        <div className="mb-6 rounded-md bg-indigo-50 p-3 text-sm text-indigo-700">
+          As an admin, your backup includes all system data across all users.
+        </div>
+      )}
 
       <div className="mb-10">
         <a
