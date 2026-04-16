@@ -33,7 +33,9 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
     now = datetime.now(timezone.utc)
 
     # Base FIFO score: older tickets get lower (better) scores
-    days_since_creation = (now - ticket.date_created).total_seconds() / 86400.0
+    # MySQL stores naive datetimes, so strip tzinfo for comparison
+    created = ticket.date_created.replace(tzinfo=timezone.utc) if ticket.date_created.tzinfo is None else ticket.date_created
+    days_since_creation = (now - created).total_seconds() / 86400.0
 
     # Effort weight: lower effort -> lower score
     est = ticket.est_hours if ticket.est_hours is not None else 1.0
