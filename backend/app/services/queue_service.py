@@ -29,17 +29,24 @@ def get_priority_weight(priority: Priority, config: QueueConfig) -> float:
 
 
 def compute_score(ticket: Ticket, config: QueueConfig) -> float:
-    """Compute the weighted FIFO score for a ticket. Lower score = served first."""
+    """Compute the weighted FIFO score for a ticket. Lower score = served first.
+
+    All config weights follow the convention:
+      positive = moves ticket closer to front (served sooner)
+      negative = pushes ticket further back (served later)
+
+    The formula SUBTRACTS each term, so a positive weight lowers the score
+    (= served sooner) and a negative weight raises it (= served later).
+    """
     now = datetime.now(timezone.utc)
 
-    # Base FIFO score: use last_skipped_at if available (resets age on skip),
-    # otherwise use date_created. Older = lower score = served first.
+    # Age: use last_skipped_at if available (resets effective age on skip)
     effective_date = ticket.last_skipped_at or ticket.date_created
     if effective_date.tzinfo is None:
         effective_date = effective_date.replace(tzinfo=timezone.utc)
     days_since_effective = (now - effective_date).total_seconds() / 86400.0
 
-    # Effort weight: lower effort -> lower score
+    # Effort
     est = ticket.est_hours if ticket.est_hours is not None else 1.0
 
     # Due-date urgency
@@ -48,17 +55,25 @@ def compute_score(ticket: Ticket, config: QueueConfig) -> float:
         today = date.today()
         days_until_due = (ticket.due_date - today).days
         if days_until_due < 0:
-            # Overdue
-            due_date_urgency = config.overdue_penalty
+            due_date_urgency = abs(days_until_due)  # days overdue (positive number)
         else:
-            due_date_urgency = days_until_due * -config.due_date_weight
+            due_date_urgency = 0.0
 
+    # Days until due (positive = still time left, negative = overdue)
+    days_until_due = 0.0
+    if ticket.due_date is not None:
+        days_until_due = max((ticket.due_date - date.today()).days, 0)
+
+    # All terms are SUBTRACTED so positive config values = lower score = served sooner.
+    # Convention: positive weight = moves ticket toward front of queue.
     score = (
-        days_since_effective * config.age_weight
-        - get_priority_weight(ticket.priority, config)
-        + ticket.skip_count * config.skip_weight  # Skips INCREASE score (push to back)
-        + est * config.effort_weight
-        - due_date_urgency
+        0.0
+        - days_since_effective * config.age_weight       # (+) older tickets served sooner
+        - get_priority_weight(ticket.priority, config)    # (+) higher priority served sooner
+        - ticket.skip_count * config.skip_weight          # (-) skipped tickets pushed back
+        - est * config.effort_weight                      # (-) bigger tasks pushed back
+        - days_until_due * config.due_date_weight         # (+) approaching deadlines served sooner
+        - due_date_urgency * config.overdue_penalty       # (+) overdue tickets served sooner
     )
     return score
 

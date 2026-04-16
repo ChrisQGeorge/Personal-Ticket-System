@@ -161,16 +161,17 @@ class QueueConfig(Base):
     __tablename__ = "queue_config"
 
     id = Column(Integer, primary_key=True, default=1)
+    # Convention: positive = moves ticket toward front, negative = pushes toward back
     age_weight = Column(Float, nullable=False, default=10.0)
-    skip_weight = Column(Float, nullable=False, default=15.0)
-    effort_weight = Column(Float, nullable=False, default=5.0)
+    skip_weight = Column(Float, nullable=False, default=-15.0)
+    effort_weight = Column(Float, nullable=False, default=-5.0)
     due_date_weight = Column(Float, nullable=False, default=3.0)
-    overdue_penalty = Column(Float, nullable=False, default=-100.0)
-    priority_very_high = Column(Float, nullable=False, default=-40.0)
-    priority_high = Column(Float, nullable=False, default=-20.0)
+    overdue_penalty = Column(Float, nullable=False, default=100.0)
+    priority_very_high = Column(Float, nullable=False, default=40.0)
+    priority_high = Column(Float, nullable=False, default=20.0)
     priority_default = Column(Float, nullable=False, default=0.0)
-    priority_low = Column(Float, nullable=False, default=20.0)
-    priority_very_low = Column(Float, nullable=False, default=40.0)
+    priority_low = Column(Float, nullable=False, default=-20.0)
+    priority_very_low = Column(Float, nullable=False, default=-40.0)
 
 
 # ---------------------------------------------------------------------------

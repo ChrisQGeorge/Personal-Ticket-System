@@ -11,22 +11,22 @@ interface FieldDef {
 }
 
 const SCORE_WEIGHTS: FieldDef[] = [
-  { key: "age_weight", label: "Age Weight", hint: "Points per day since creation" },
-  { key: "skip_weight", label: "Skip Weight", hint: "Points per time the ticket has been skipped" },
-  { key: "effort_weight", label: "Effort Weight", hint: "Points per estimated hour of effort" },
+  { key: "age_weight", label: "Age Weight", hint: "Positive = older tickets come up sooner. Default: 10" },
+  { key: "skip_weight", label: "Skip Penalty", hint: "Negative = skipped tickets pushed back. Default: -15" },
+  { key: "effort_weight", label: "Effort Weight", hint: "Negative = bigger tasks pushed back. Default: -5" },
 ];
 
 const DUE_DATE_FIELDS: FieldDef[] = [
-  { key: "due_date_weight", label: "Due Date Weight", hint: "Points per day until due date" },
-  { key: "overdue_penalty", label: "Overdue Penalty", hint: "Flat penalty added when a ticket is past due" },
+  { key: "due_date_weight", label: "Due Date Urgency", hint: "Positive = approaching deadlines come up sooner. Default: 3" },
+  { key: "overdue_penalty", label: "Overdue Boost", hint: "Positive = overdue tickets come up sooner. Default: 100" },
 ];
 
 const PRIORITY_FIELDS: FieldDef[] = [
-  { key: "priority_very_high", label: "Very High", hint: "Score offset for very-high priority" },
-  { key: "priority_high", label: "High", hint: "Score offset for high priority" },
-  { key: "priority_default", label: "Default", hint: "Score offset for default priority" },
-  { key: "priority_low", label: "Low", hint: "Score offset for low priority" },
-  { key: "priority_very_low", label: "Very Low", hint: "Score offset for very-low priority" },
+  { key: "priority_very_high", label: "Very High", hint: "Positive = comes up sooner. Default: 40" },
+  { key: "priority_high", label: "High", hint: "Positive = comes up sooner. Default: 20" },
+  { key: "priority_default", label: "Default", hint: "Usually 0. Default: 0" },
+  { key: "priority_low", label: "Low", hint: "Negative = pushed back. Default: -20" },
+  { key: "priority_very_low", label: "Very Low", hint: "Negative = pushed further back. Default: -40" },
 ];
 
 export default function ConfigPage() {
@@ -163,7 +163,12 @@ export default function ConfigPage() {
 
   return (
     <div className="mx-auto max-w-2xl py-8">
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Queue Settings</h1>
+      <h1 className="mb-2 text-2xl font-bold text-gray-900">Queue Settings</h1>
+      <p className="mb-6 text-sm text-gray-500">
+        These weights control the order tickets are served from the queue.
+        For all settings: <strong>positive = closer to front</strong> (served sooner)
+        and <strong>negative = pushed to back</strong> (served later).
+      </p>
 
       {error && (
         <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">

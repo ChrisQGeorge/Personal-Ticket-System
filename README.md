@@ -7,6 +7,7 @@ A self-hosted task management app with a weighted FIFO queue that decides what y
 **Queue-Driven Workflow**
 - Weighted scoring algorithm considers age, priority, due date urgency, skip count, and effort
 - Complete or skip tickets -- the next one loads automatically
+- Skipping resets a ticket's effective age and adds a skip penalty, pushing it to the back of the queue
 - Admin-configurable scoring weights with reset-to-defaults
 
 **Ticket Management**
@@ -36,6 +37,31 @@ A self-hosted task management app with a weighted FIFO queue that decides what y
 **Backup & Restore**
 - Full JSON backup/restore for server migration
 - User-scoped (admin gets all data), IMAP passwords stripped from exports
+
+**Gamification -- "Task Quest"**
+- Opt-in per user from the Account page or /gamification dashboard
+- XP system: earn 50-250 XP for completing tickets (scaled by priority), 25+ XP for creating tickets, lose 50 XP for skipping
+- Effort, streak, and combo multipliers stack on completion XP
+- 100 levels across 10 rank titles: Apprentice, Journeyman, Expert, Master, Grandmaster, Myth-Seeker, Legend, Titan, Immortal, Ascended One
+- Streaks: complete 1+ ticket daily; bonuses at 3/7/14/30 days; streak shield unlocks at 30 days
+- Combo system: completing without skipping builds multiplier (1.2x at 3, 1.4x at 5, 1.75x at 10); skipping resets combo
+- 22 achievements from "Ticket Writer" (create first ticket) to "Mythical Streak" (100-day streak)
+- 3 daily challenges and 1 weekly challenge, randomly selected
+- Gamification dashboard at /gamification with XP progress, achievements, and challenge cards
+- XP toast notifications on complete/skip/create
+- Level badge displayed in the navbar when enabled
+- Gamification summary card on the home page
+
+**Chrome Extension**
+- Create tickets and work the queue from any browser tab
+- Manifest V3, vanilla JS, no build step required
+- Two tabs: Create Ticket and Queue (complete/skip)
+- Configurable server URL stored in Chrome sync storage
+- Login via same cookie-based authentication
+- Profile selector for both create and queue views
+- Gamification bar showing level, XP, streak, and combo
+- Game event notifications inline (XP gains/losses, level ups, achievements)
+- Downloadable as zip from the Account page
 
 **Authentication & Security**
 - User accounts with Argon2id hashing, JWT in httpOnly cookies
@@ -128,25 +154,35 @@ Personal-Ticket-System/
 │   ├── requirements.txt
 │   ├── entrypoint.sh
 │   └── app/
-│       ├── main.py               # FastAPI app, lifespan, CORS, security headers, routers
+│       ├── main.py               # FastAPI app, lifespan, CORS, security headers, routers, extension download
 │       ├── database.py           # SQLAlchemy engine and session
-│       ├── models.py             # ORM models + enums
+│       ├── models.py             # ORM models + enums (includes UserGameStats)
 │       ├── schemas.py            # Pydantic request/response schemas
 │       ├── auth.py               # Argon2id, JWT, Fernet, auth dependencies
 │       ├── routers/
 │       │   ├── auth.py           # Login, register, logout, change password
 │       │   ├── admin.py          # User management (admin only)
-│       │   ├── tickets.py        # Ticket CRUD
-│       │   ├── queue.py          # Queue next/complete/skip/stats
+│       │   ├── tickets.py        # Ticket CRUD (+ creation gamification)
+│       │   ├── queue.py          # Queue next/complete/skip/stats (+ gamification events)
 │       │   ├── recurring.py      # Recurring template CRUD
 │       │   ├── config.py         # Queue weight config (admin only)
 │       │   ├── imports.py        # CSV/Excel import + template download
 │       │   ├── profiles.py       # Profile CRUD + IMAP test
-│       │   └── backup.py         # Backup download + restore
+│       │   ├── backup.py         # Backup download + restore
+│       │   └── gamification.py   # Gamification stats + toggle
 │       └── services/
-│           ├── queue_service.py   # Scoring algorithm
+│           ├── queue_service.py   # Scoring algorithm (uses last_skipped_at)
+│           ├── gamification.py    # XP, levels, streaks, combos, achievements, challenges
 │           ├── scheduler.py       # Recurring ticket + email polling loop
 │           └── email_service.py   # IMAP email-to-ticket
+├── chrome-extension/
+│   ├── manifest.json             # Manifest V3
+│   ├── popup.html                # Extension popup UI
+│   ├── popup.js                  # Create ticket + queue logic + gamification bar
+│   ├── popup.css                 # Styles
+│   ├── options.html              # Settings page (server URL)
+│   ├── options.js                # Settings logic
+│   └── icons/                    # Extension icons (16/48/128)
 ├── frontend/
 │   ├── Dockerfile
 │   ├── package.json
@@ -163,12 +199,14 @@ Personal-Ticket-System/
 │       │   ├── import/page.tsx        # CSV/Excel import
 │       │   ├── backup/page.tsx        # Backup & restore
 │       │   ├── admin/users/page.tsx   # User management (admin)
-│       │   └── account/page.tsx       # Password change
+│       │   ├── account/page.tsx       # Password change + extension download
+│       │   └── gamification/page.tsx  # Task Quest dashboard
 │       ├── components/
-│       │   ├── Navbar.tsx
+│       │   ├── Navbar.tsx             # Includes level badge when gamification enabled
 │       │   ├── AuthGate.tsx
 │       │   ├── TicketForm.tsx
-│       │   └── RecurringForm.tsx
+│       │   ├── RecurringForm.tsx
+│       │   └── GameEventToast.tsx     # XP toast notifications
 │       └── lib/
 │           ├── api.ts             # Typed API client
 │           └── types.ts           # TypeScript interfaces
@@ -210,7 +248,7 @@ All endpoints are prefixed with `/api`. Auth-required endpoints read the JWT fro
 |--------|------|------|-------------|
 | `GET` | `/api/queue/next` | Yes | Get next ticket (lowest score). Query: `profile_id`. |
 | `POST` | `/api/queue/complete/{id}` | Yes | Mark ticket as completed. |
-| `POST` | `/api/queue/skip/{id}` | Yes | Skip ticket (increments skip count). |
+| `POST` | `/api/queue/skip/{id}` | Yes | Skip ticket (increments skip count, sets `last_skipped_at`, resets effective age). |
 | `GET` | `/api/queue/stats` | Yes | Ticket counts by status. Query: `profile_id`. |
 
 ### Recurring Templates
@@ -264,6 +302,19 @@ All endpoints are prefixed with `/api`. Auth-required endpoints read the JWT fro
 | `PUT` | `/api/admin/users/{id}/role` | Admin | Change a user's role. |
 | `PUT` | `/api/admin/users/{id}/active` | Admin | Activate/deactivate a user. Invalidates their tokens. |
 | `DELETE` | `/api/admin/users/{id}` | Admin | Delete a user. |
+
+### Gamification
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/gamification/stats` | Yes | Get full game stats (level, XP, streak, combo, achievements, challenges). |
+| `POST` | `/api/gamification/toggle` | Yes | Enable/disable gamification. Body: `{"enabled": true}`. |
+
+### Extension
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/extension/download` | No | Download Chrome extension as a zip file. |
 
 ### Health
 
