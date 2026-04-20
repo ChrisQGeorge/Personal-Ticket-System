@@ -40,11 +40,11 @@ export interface TicketCreate {
 export interface TicketUpdate {
   title?: string;
   status?: TicketStatus;
-  description?: string;
+  description?: string | null;
   related_ticket_ids?: number[];
-  due_date?: string;
+  due_date?: string | null;
   priority?: Priority;
-  est_hours?: number;
+  est_hours?: number | null;
   profile_id?: number;
   custom_attributes?: CustomAttribute[];
 }

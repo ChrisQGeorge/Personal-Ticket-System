@@ -207,7 +207,7 @@ The application consists of the following screens, all rendered as web pages in 
 
 #### 3.1.3 Software Interfaces
 <!-- integrations with other systems (APIs, contracts, owner, etc) -->
-The application should be run with Docker where the API and Frontend are run in one docker container called "App", and the database should use a second container called "DB" and potentially a third container for an email server, if deemed nescisary.
+The application should be run with Docker where the API and Frontend are run in one docker container called "App", and the database should use a second container called "DB" and potentially a third container for an email server, if deemed necessary.
 
 The stack should consist of a Next.js, fastAPI, and MySql, with additional needed container and services such as redis or nginx as needed.
 

@@ -56,14 +56,15 @@ export default function TicketForm({ ticket }: Props) {
 
     try {
       if (isEdit) {
+        // On edit, send null for cleared fields so backend knows to clear them
         const data: TicketUpdate = {
           title: title.trim(),
-          description: description.trim() || undefined,
+          description: description.trim() || null,
           priority,
           status,
-          due_date: dueDate || undefined,
-          est_hours: estHours ? parseFloat(estHours) : undefined,
-          related_ticket_ids: related.length > 0 ? related : undefined,
+          due_date: dueDate || null,
+          est_hours: estHours ? parseFloat(estHours) : null,
+          related_ticket_ids: related,
           custom_attributes: customAttributes,
         };
         await updateTicket(ticket!.id, data);
