@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="assets/Logo.png" alt="PTS" width="200">
+</p>
+
 # Personal Ticket System (PTS)
 
 A self-hosted task management app with a weighted FIFO queue that decides what you should work on next, eliminating decision fatigue.
+
+Branding materials (logo, full branding suite) live in the [`assets/`](assets/) folder at the project root.
 
 ## Features
 
@@ -14,6 +20,15 @@ A self-hosted task management app with a weighted FIFO queue that decides what y
 - Full CRUD with priority, due dates, time estimates, and related tickets
 - Filterable by status/priority, sortable columns
 - Mobile-responsive (cards on mobile, table on desktop)
+
+**Custom Attributes**
+- Add unlimited user-defined attributes to any ticket or recurring template
+- Each attribute has a name, type (`text` / `number` / `boolean` / `date`), goal, and current value
+- Dynamic editor with add/remove buttons and per-type inputs
+- Number-type attributes render as `current / goal` plus a progress bar on the queue page
+- Recurring templates define the structure; the "current" value is reset (`0` for numbers, `false` for booleans, `null` otherwise) every time a ticket is fired from the template
+- Use cases: tracking job-application counts, version numbers, checklists, status flags, links, etc.
+- Included in CSV/Excel imports and JSON backup/restore
 
 **Profiles**
 - Multiple independent profiles per user (e.g., Personal, Work)
@@ -147,6 +162,9 @@ Personal-Ticket-System/
 ├── docker-compose.yml
 ├── .env.template
 ├── setup.sh
+├── assets/                       # Branding materials
+│   ├── Logo.png                  # PTS logo
+│   └── Branding Suite.png        # Full branding suite
 ├── db-init/
 │   └── 01-grant-access.sql      # Least-privilege DB grants
 ├── backend/
@@ -206,6 +224,7 @@ Personal-Ticket-System/
 │       │   ├── AuthGate.tsx
 │       │   ├── TicketForm.tsx
 │       │   ├── RecurringForm.tsx
+│       │   ├── CustomAttributesEditor.tsx  # Dynamic attribute editor (used by ticket + template forms)
 │       │   └── GameEventToast.tsx     # XP toast notifications
 │       └── lib/
 │           ├── api.ts             # Typed API client
@@ -237,9 +256,9 @@ All endpoints are prefixed with `/api`. Auth-required endpoints read the JWT fro
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/api/tickets` | Yes | List tickets. Query: `status`, `priority`, `profile_id`, `sort_by`, `sort_order`. |
-| `POST` | `/api/tickets` | Yes | Create a ticket. |
+| `POST` | `/api/tickets` | Yes | Create a ticket. Body may include `custom_attributes`. |
 | `GET` | `/api/tickets/{id}` | Yes | Get a ticket by ID. |
-| `PUT` | `/api/tickets/{id}` | Yes | Update a ticket. |
+| `PUT` | `/api/tickets/{id}` | Yes | Update a ticket. Body may include `custom_attributes`. |
 | `DELETE` | `/api/tickets/{id}` | Yes | Delete a ticket. |
 
 ### Queue
@@ -256,9 +275,9 @@ All endpoints are prefixed with `/api`. Auth-required endpoints read the JWT fro
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/api/recurring` | Yes | List templates. Query: `profile_id`. |
-| `POST` | `/api/recurring` | Yes | Create a template. |
+| `POST` | `/api/recurring` | Yes | Create a template. Body may include `custom_attributes` (no `current` field needed). |
 | `GET` | `/api/recurring/{id}` | Yes | Get a template. |
-| `PUT` | `/api/recurring/{id}` | Yes | Update a template. |
+| `PUT` | `/api/recurring/{id}` | Yes | Update a template. Body may include `custom_attributes`. |
 | `DELETE` | `/api/recurring/{id}` | Yes | Delete a template. |
 
 ### Profiles

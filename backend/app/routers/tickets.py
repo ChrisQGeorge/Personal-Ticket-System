@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Optional
 
@@ -23,6 +24,16 @@ def _strip_html_tags(text: str) -> str:
     return re.sub(r'<[^>]+>', '', text)
 
 
+def _parse_custom_attributes(value: Optional[str]) -> list:
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+        return data if isinstance(data, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
 def _ticket_to_response(ticket: Ticket) -> TicketResponse:
     related_ids = [t.id for t in ticket.related_tickets]
     return TicketResponse(
@@ -37,6 +48,7 @@ def _ticket_to_response(ticket: Ticket) -> TicketResponse:
         skip_count=ticket.skip_count,
         related_ticket_ids=related_ids,
         profile_id=ticket.profile_id,
+        custom_attributes=_parse_custom_attributes(ticket.custom_attributes),
     )
 
 
@@ -116,6 +128,7 @@ def create_ticket(
         priority=payload.priority,
         est_hours=payload.est_hours,
         profile_id=payload.profile_id,
+        custom_attributes=json.dumps([a.model_dump() for a in payload.custom_attributes]) if payload.custom_attributes else "[]",
     )
     db.add(ticket)
     db.flush()
@@ -172,6 +185,11 @@ def update_ticket(
             Profile.user_id == user.id,
         ).all()
         ticket.related_tickets = related
+
+    # Custom attributes: serialize list to JSON string for storage
+    if "custom_attributes" in update_data:
+        attrs = update_data.pop("custom_attributes")
+        ticket.custom_attributes = json.dumps(attrs) if attrs is not None else "[]"
 
     for field, value in update_data.items():
         setattr(ticket, field, value)

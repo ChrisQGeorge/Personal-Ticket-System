@@ -104,6 +104,51 @@ The **Tickets** page shows all your tickets in a sortable table (desktop) or car
 
 ---
 
+### Custom Attributes
+
+Custom attributes let you attach unlimited user-defined fields to any ticket or recurring template. Use them to track progress against goals, store flags, link related URLs, record version numbers, or anything else that does not fit the built-in fields.
+
+**Adding attributes to a ticket:**
+
+1. Open the ticket create or edit page.
+2. In the **Custom Attributes** section, click **+ Add Attribute**.
+3. Enter a name (max 100 chars), pick a type, and set the goal and (optionally) the current value.
+4. Save the ticket.
+
+**Attribute types:**
+
+| Type | Goal/Current input | Display on the queue page |
+|---|---|---|
+| `text` | Free-form text | Plain text, with `goal` shown if it differs from `current` |
+| `number` | Numeric input | `current / goal` plus a progress bar (clamped at 100%) |
+| `boolean` | Yes / No selector | Green "Yes" pill or grey "No" pill |
+| `date` | Date picker | Plain date string |
+
+**On the queue:** When the queue page loads a ticket, all of its custom attributes appear in an "Attributes" panel. Number attributes get a visual progress bar showing how close `current` is to `goal`.
+
+**Attributes on recurring templates:**
+
+When you add custom attributes to a recurring template, only the **structure** is defined -- the editor hides the "current" field because templates don't track progress themselves. Each time the template fires and creates a new ticket, the attributes are copied with `current` reset:
+
+- `number` -> `0`
+- `boolean` -> `false`
+- `text`, `date`, anything else -> `null`
+
+This means a template like "Weekly job hunt" with attribute `Jobs applied` (number, goal 10) will create a fresh ticket every week with a 0/10 counter ready to fill in.
+
+**Examples:**
+
+- A "Job Search" recurring ticket with `Jobs applied` (number, goal 10) -- progress bar shows weekly progress.
+- A "Code Review" ticket with `PR approved` (boolean) and `Tests passing` (boolean).
+- A "Release" ticket with `Version` (text, goal "v2.4.0").
+- A "Birthday gift" ticket with `Deadline` (date).
+
+**Imports:** The Excel/CSV import template includes a **Custom Attributes** column. Cells in this column should contain a JSON array string, e.g., `[{"name": "Jobs applied", "type": "number", "goal": 10, "current": 0}]`. Empty cells mean no attributes.
+
+**Backups:** Custom attributes are included in JSON backups for both tickets and recurring templates and are restored verbatim.
+
+---
+
 ### Profiles
 
 Profiles let you maintain completely separate ticket lists. For example, you might have a "Personal" profile and a "Work" profile.
@@ -205,9 +250,17 @@ Go to the **Import** page to bulk-create tickets from a file.
 **Steps:**
 
 1. Optionally download the template (click **Download Template**) to see the expected columns.
-2. Prepare your file with columns: Title, Description, Priority, Due Date, Est Hours, Status.
+2. Prepare your file with columns: Title, Description, Priority, Due Date, Est Hours, Status, Custom Attributes.
 3. Select a profile to import into (or leave as default).
 4. Upload the file.
+
+**Custom Attributes column:** Cells in this column accept a JSON array string describing the attributes for that ticket. Example:
+
+```json
+[{"name": "Jobs applied", "type": "number", "goal": 10, "current": 0}]
+```
+
+Leave the cell empty to import a ticket with no custom attributes.
 
 **Limits:** 10MB file size, 5000 rows maximum.
 
@@ -221,7 +274,7 @@ Go to the **Import** page to bulk-create tickets from a file.
 
 Go to the **Backup** page.
 
-**Download Backup:** Creates a JSON file containing all your profiles, tickets, recurring templates, ticket relationships, and queue config. Admin users get all users' data; regular users get only their own.
+**Download Backup:** Creates a JSON file containing all your profiles, tickets (including their custom attributes), recurring templates (including their custom attributes), ticket relationships, and queue config. Admin users get all users' data; regular users get only their own.
 
 IMAP passwords are always stripped from backups.
 
@@ -402,6 +455,8 @@ The system runs as three Docker containers on a bridge network (`pts_network`):
 
 All containers use `restart: unless-stopped`. The backend waits for the DB health check before starting.
 
+**Branding assets:** The project ships with branding materials in the `assets/` folder at the repo root: `assets/Logo.png` (the PTS logo, used in the README header) and `assets/Branding Suite.png` (full branding suite). These files are not consumed by the running app -- they are available for documentation, marketing, or third-party integrations.
+
 ---
 
 ### Backend Structure
@@ -469,8 +524,9 @@ frontend/src/
 ├── components/
 │   ├── Navbar.tsx              # Navigation, responsive mobile menu, level badge
 │   ├── AuthGate.tsx            # Authentication wrapper, redirects to login
-│   ├── TicketForm.tsx          # Shared create/edit ticket form
-│   ├── RecurringForm.tsx       # Shared create/edit template form
+│   ├── TicketForm.tsx          # Shared create/edit ticket form (embeds CustomAttributesEditor)
+│   ├── RecurringForm.tsx       # Shared create/edit template form (embeds CustomAttributesEditor with showCurrent=false)
+│   ├── CustomAttributesEditor.tsx  # Dynamic add/remove editor for custom attributes
 │   └── GameEventToast.tsx      # XP toast notifications (complete/skip/create)
 └── lib/
     ├── api.ts                  # Typed fetch wrapper with credentials: "include"
@@ -529,6 +585,7 @@ frontend/src/
 | skip_count | INT | NOT NULL, default 0 |
 | last_skipped_at | DATETIME | Nullable. Set on skip; used as effective age in queue scoring. |
 | profile_id | INT | FK -> profiles.id |
+| custom_attributes | TEXT | NOT NULL, default `"[]"`. JSON array of `{name, type, goal, current}` objects. |
 
 #### `user_game_stats`
 
@@ -583,6 +640,7 @@ frontend/src/
 | next_fire | DATETIME | Nullable |
 | profile_id | INT | FK -> profiles.id |
 | due_in_days | INT | Nullable |
+| custom_attributes | TEXT | NOT NULL, default `"[]"`. JSON array of `{name, type, goal, current}` objects. `current` is reset on each fire. |
 
 #### `queue_config` (singleton, always id=1)
 
@@ -720,6 +778,59 @@ if frequency == "monthly":  next = base + relativedelta(months=interval_count)
 ```
 
 **Idempotency:** `last_fired` is updated immediately after firing. The query filters `next_fire <= now`, so a template will not fire twice for the same interval.
+
+**Custom attribute reset on fire:** `fire_template()` reads the template's `custom_attributes` JSON, resets the `current` field on each entry by type (`number` -> `0`, `boolean` -> `false`, anything else -> `null`), then writes the result to the new ticket's `custom_attributes` column. This way every fired ticket starts with a fresh "current" value but inherits the goal/structure from the template.
+
+---
+
+### Custom Attributes
+
+Custom attributes are user-defined key/value-style fields attached to tickets and recurring templates. They are designed to be schemaless from the database's point of view but typed at the application layer for sensible UI rendering.
+
+**Data model:**
+
+- Stored as a single `TEXT` column called `custom_attributes` on both `tickets` and `recurring_templates`.
+- Default value: `"[]"` (empty JSON array).
+- The column is `NOT NULL`; the application never writes `NULL`.
+
+**JSON storage format:**
+
+The column contains a JSON array of objects with this shape:
+
+```json
+[
+  { "name": "Jobs applied", "type": "number",  "goal": 10,             "current": 0 },
+  { "name": "Reviewer",     "type": "text",    "goal": "Alice",        "current": null },
+  { "name": "Tests pass",   "type": "boolean", "goal": true,            "current": false },
+  { "name": "Ship date",    "type": "date",    "goal": "2026-05-01",    "current": null }
+]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string, 1-100 chars | Required. Used as the display label. |
+| `type` | `"text"` \| `"number"` \| `"boolean"` \| `"date"` | Defaults to `"text"`. Drives the UI control type. |
+| `goal` | any JSON value | Optional. Target value. |
+| `current` | any JSON value | Optional. Current progress value. Always `null`/`0`/`false` on a recurring template (see below). |
+
+**Pydantic schema:**
+
+`CustomAttribute` (in `backend/app/schemas.py`) validates `name` and accepts any JSON value for `goal` and `current`. Both `TicketBase` and `RecurringTemplateBase` accept `custom_attributes: Optional[List[CustomAttribute]]` on create and update payloads, and the response schemas return them as a typed list.
+
+**Recurring template behaviour:**
+
+- The `CustomAttributesEditor` React component is rendered with `showCurrent={false}` for templates, so users only fill in `name`, `type`, and `goal`.
+- When `fire_template()` runs in `backend/app/services/scheduler.py`, it parses the template's JSON, resets each entry's `current` based on `type`, and writes the result to the new ticket.
+
+**Frontend rendering:**
+
+- `frontend/src/components/CustomAttributesEditor.tsx` -- shared add/remove editor used by both `TicketForm.tsx` and `RecurringForm.tsx`. Renders type-appropriate inputs and supports a `showCurrent` prop.
+- `frontend/src/app/queue/page.tsx` -- displays attributes in an "Attributes" panel. Number attributes get a `current / goal` label and a progress bar (`min(100, current/goal * 100)`).
+
+**Import / Export:**
+
+- `backend/app/routers/imports.py` adds a "Custom Attributes" column to the downloadable Excel template. On import, the cell value is parsed as JSON and stored verbatim into `custom_attributes`. Invalid JSON falls back to `"[]"`.
+- `backend/app/routers/backup.py` includes the raw `custom_attributes` JSON string for tickets and recurring templates in both the backup payload and the restore path.
 
 ---
 
@@ -1062,7 +1173,10 @@ Response `200`:
     "est_hours": 2.0,
     "skip_count": 0,
     "related_ticket_ids": [3],
-    "profile_id": 1
+    "profile_id": 1,
+    "custom_attributes": [
+      { "name": "Jobs applied", "type": "number", "goal": 10, "current": 3 }
+    ]
   }
 ]
 ```
@@ -1080,11 +1194,14 @@ Request:
   "priority": "high",
   "est_hours": 2.0,
   "related_ticket_ids": [3],
-  "profile_id": 1
+  "profile_id": 1,
+  "custom_attributes": [
+    { "name": "Jobs applied", "type": "number", "goal": 10, "current": 0 }
+  ]
 }
 ```
 
-Only `title` is required. Response `201`: the created ticket object. If gamification is enabled, the response includes a `game_event` field with XP earned (25 base + bonuses), new achievements, and level info.
+Only `title` is required. `custom_attributes` is optional; if provided, each entry must have a `name` (1-100 chars) and may include `type` (`text` / `number` / `boolean` / `date`), `goal`, and `current`. Response `201`: the created ticket object. If gamification is enabled, the response includes a `game_event` field with XP earned (25 base + bonuses), new achievements, and level info.
 
 ---
 
@@ -1102,11 +1219,14 @@ Request (all fields optional):
   "title": "Updated title",
   "status": "completed",
   "priority": "low",
-  "est_hours": 3.0
+  "est_hours": 3.0,
+  "custom_attributes": [
+    { "name": "Jobs applied", "type": "number", "goal": 10, "current": 7 }
+  ]
 }
 ```
 
-Response `200`: updated ticket object.
+Sending `custom_attributes` replaces the full set on the ticket (the editor sends the complete list). Response `200`: updated ticket object.
 
 ---
 
@@ -1231,7 +1351,10 @@ Response `200`:
     "start_date": "2026-01-06",
     "last_fired": "2026-04-07T12:00:00",
     "next_fire": "2026-04-14T12:00:00",
-    "profile_id": 1
+    "profile_id": 1,
+    "custom_attributes": [
+      { "name": "Loads", "type": "number", "goal": 3, "current": null }
+    ]
   }
 ]
 ```
@@ -1251,11 +1374,14 @@ Request:
   "frequency": "weekly",
   "interval_count": 1,
   "start_date": "2026-01-06",
-  "profile_id": 1
+  "profile_id": 1,
+  "custom_attributes": [
+    { "name": "Loads", "type": "number", "goal": 3 }
+  ]
 }
 ```
 
-Required: `title`, `frequency`, `start_date`. Response `201`.
+Required: `title`, `frequency`, `start_date`. `custom_attributes` is optional; the `current` field is ignored at the template level (it gets reset to `0`/`false`/`null` by type whenever a ticket is fired from the template). Response `201`.
 
 ---
 
@@ -1272,11 +1398,14 @@ Request (all fields optional):
 {
   "active": false,
   "interval_count": 2,
-  "due_in_days": 14
+  "due_in_days": 14,
+  "custom_attributes": [
+    { "name": "Loads", "type": "number", "goal": 5 }
+  ]
 }
 ```
 
-If `frequency`, `interval_count`, or `start_date` change, `next_fire` is recomputed.
+If `frequency`, `interval_count`, or `start_date` change, `next_fire` is recomputed. Sending `custom_attributes` replaces the full set on the template.
 
 Response `200`.
 

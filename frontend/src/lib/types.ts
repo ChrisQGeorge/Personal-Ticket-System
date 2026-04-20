@@ -2,6 +2,15 @@ export type TicketStatus = "open" | "in-progress" | "completed" | "skipped";
 
 export type Priority = "very low" | "low" | "default" | "high" | "very high";
 
+export type CustomAttributeType = "text" | "number" | "boolean" | "date";
+
+export interface CustomAttribute {
+  name: string;
+  type: CustomAttributeType;
+  goal?: string | number | boolean | null;
+  current?: string | number | boolean | null;
+}
+
 export interface Ticket {
   id: number;
   title: string;
@@ -14,6 +23,7 @@ export interface Ticket {
   est_hours?: number;
   skip_count: number;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export interface TicketCreate {
@@ -24,6 +34,7 @@ export interface TicketCreate {
   priority?: Priority;
   est_hours?: number;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export interface TicketUpdate {
@@ -35,6 +46,7 @@ export interface TicketUpdate {
   priority?: Priority;
   est_hours?: number;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export type Frequency = "daily" | "weekly" | "monthly";
@@ -53,6 +65,7 @@ export interface RecurringTemplate {
   last_fired?: string;
   next_fire?: string;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export interface RecurringTemplateCreate {
@@ -66,6 +79,7 @@ export interface RecurringTemplateCreate {
   interval_count?: number;
   start_date: string;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export interface RecurringTemplateUpdate {
@@ -79,6 +93,7 @@ export interface RecurringTemplateUpdate {
   interval_count?: number;
   start_date?: string;
   profile_id?: number;
+  custom_attributes?: CustomAttribute[];
 }
 
 export interface QueueStats {

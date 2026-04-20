@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 from datetime import datetime
 
 from typing import Optional
@@ -112,6 +113,20 @@ def rows_to_tickets(rows, headers, db: Session, profile_id: Optional[int] = None
 
             est_hours = parse_float(_get_cell(row, col_map, "est_hours", "est hours"))
 
+            # Custom attributes: expects a JSON array string in the cell
+            # e.g., [{"name": "Jobs applied", "type": "number", "goal": 10, "current": 0}]
+            custom_attrs_val = _get_cell(row, col_map, "custom_attributes", "custom attributes")
+            custom_attrs_json = "[]"
+            if custom_attrs_val:
+                s = str(custom_attrs_val).strip()
+                if s and s.lower() != "none":
+                    try:
+                        parsed = json.loads(s)
+                        if isinstance(parsed, list):
+                            custom_attrs_json = json.dumps(parsed)
+                    except (ValueError, TypeError):
+                        pass  # Invalid JSON — skip, keep default []
+
             ticket = Ticket(
                 title=title,
                 description=description,
@@ -120,6 +135,7 @@ def rows_to_tickets(rows, headers, db: Session, profile_id: Optional[int] = None
                 due_date=due_date,
                 est_hours=est_hours,
                 profile_id=profile_id,
+                custom_attributes=custom_attrs_json,
             )
             db.add(ticket)
             imported += 1
@@ -211,10 +227,27 @@ def download_template(user: User = Depends(get_current_user)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Tickets"
-    headers = ["Title", "Description", "Priority", "Due Date", "Est Hours", "Status"]
+    headers = ["Title", "Description", "Priority", "Due Date", "Est Hours", "Status", "Custom Attributes"]
     ws.append(headers)
-    # Example row
-    ws.append(["Example Task", "Description of the task", "default", "2025-12-31", 1.5, "open"])
+    # Example rows
+    ws.append([
+        "Example Task",
+        "Description of the task",
+        "default",
+        "2025-12-31",
+        1.5,
+        "open",
+        '[{"name": "Jobs applied", "type": "number", "goal": 10, "current": 0}]',
+    ])
+    ws.append([
+        "Simple Task",
+        "No custom attributes needed",
+        "default",
+        "",
+        "",
+        "open",
+        "",
+    ])
 
     # Style header row bold
     for cell in ws[1]:

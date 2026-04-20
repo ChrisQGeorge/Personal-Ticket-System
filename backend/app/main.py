@@ -43,6 +43,10 @@ async def lifespan(app: FastAPI):
             db.execute(text("ALTER TABLE tickets ADD COLUMN last_skipped_at DATETIME NULL"))
             db.commit()
             logger.info("Added last_skipped_at column to tickets table.")
+        if "custom_attributes" not in ticket_cols:
+            db.execute(text("ALTER TABLE tickets ADD COLUMN custom_attributes TEXT NOT NULL DEFAULT ('[]')"))
+            db.commit()
+            logger.info("Added custom_attributes column to tickets table.")
         if "profile_id" not in ticket_cols:
             db.execute(text("ALTER TABLE tickets ADD COLUMN profile_id INTEGER NULL"))
             db.execute(text("ALTER TABLE tickets ADD CONSTRAINT fk_tickets_profile FOREIGN KEY (profile_id) REFERENCES profiles(id)"))
@@ -60,6 +64,10 @@ async def lifespan(app: FastAPI):
             db.execute(text("ALTER TABLE recurring_templates ADD COLUMN due_in_days INTEGER NULL"))
             db.commit()
             logger.info("Added due_in_days column to recurring_templates table.")
+        if "custom_attributes" not in recurring_cols:
+            db.execute(text("ALTER TABLE recurring_templates ADD COLUMN custom_attributes TEXT NOT NULL DEFAULT ('[]')"))
+            db.commit()
+            logger.info("Added custom_attributes column to recurring_templates table.")
 
         # Add user_id to profiles if missing
         profile_cols = {c["name"] for c in inspector.get_columns("profiles")}

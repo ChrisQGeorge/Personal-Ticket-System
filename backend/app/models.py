@@ -139,6 +139,7 @@ class Ticket(Base):
     skip_count = Column(Integer, nullable=False, default=0)
     last_skipped_at = Column(DateTime, nullable=True)  # Reset effective age on skip
     profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
+    custom_attributes = Column(Text, nullable=False, default="[]")  # JSON array of {name, goal, current}
 
     profile = relationship("Profile", back_populates="tickets")
 
@@ -200,6 +201,7 @@ class RecurringTemplate(Base):
     # Relative due date: when a ticket is created from this template,
     # set its due date to creation_date + due_in_days
     due_in_days = Column(Integer, nullable=True)  # e.g., 7 means due 1 week after creation
+    custom_attributes = Column(Text, nullable=False, default="[]")  # JSON array of {name, goal, current}
 
     profile = relationship("Profile", back_populates="recurring_templates")
 

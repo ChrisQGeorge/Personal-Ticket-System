@@ -101,6 +101,11 @@
             <label>Profile</label>
             <select id="create-profile"></select>
           </div>
+          <div class="form-group">
+            <label>Custom Attributes</label>
+            <div id="create-attrs" class="attrs-list"></div>
+            <button type="button" id="create-attr-add" class="btn-add-attr">+ Add Attribute</button>
+          </div>
           <button type="submit" class="btn btn-primary full-width" id="create-btn">Create Ticket</button>
         </form>
         <div id="create-success" class="success hidden">
@@ -135,6 +140,7 @@
             <span id="queue-ticket-hours"></span>
             <span id="queue-ticket-skips"></span>
           </div>
+          <div id="queue-ticket-attrs" class="queue-attrs hidden"></div>
           <div class="ticket-actions">
             <button class="btn btn-complete" id="queue-complete-btn">&#10003; Complete</button>
             <button class="btn btn-skip" id="queue-skip-btn">&#8594; Skip</button>

@@ -8,9 +8,11 @@ import {
   RecurringTemplateUpdate,
   Priority,
   Frequency,
+  CustomAttribute,
 } from "@/lib/types";
 import { createRecurring, updateRecurring, deleteRecurring } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
+import CustomAttributesEditor from "@/components/CustomAttributesEditor";
 
 const PRIORITIES: Priority[] = ["very low", "low", "default", "high", "very high"];
 const FREQUENCIES: Frequency[] = ["daily", "weekly", "monthly"];
@@ -35,6 +37,9 @@ export default function RecurringForm({ template }: Props) {
     template?.interval_count?.toString() ?? "1"
   );
   const [startDate, setStartDate] = useState(template?.start_date ?? "");
+  const [customAttributes, setCustomAttributes] = useState<CustomAttribute[]>(
+    template?.custom_attributes ?? []
+  );
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -68,6 +73,7 @@ export default function RecurringForm({ template }: Props) {
           frequency,
           interval_count: parseInt(intervalCount) || 1,
           start_date: startDate,
+          custom_attributes: customAttributes,
         };
         await updateRecurring(template!.id, data);
       } else {
@@ -82,6 +88,7 @@ export default function RecurringForm({ template }: Props) {
           interval_count: parseInt(intervalCount) || 1,
           start_date: startDate,
           profile_id: activeProfile?.id,
+          custom_attributes: customAttributes,
         };
         await createRecurring(data);
       }
@@ -250,6 +257,21 @@ export default function RecurringForm({ template }: Props) {
             Active
           </label>
         </div>
+      </div>
+
+      {/* Custom Attributes */}
+      <div>
+        <label className="mb-2 block text-sm font-medium text-gray-700">
+          Custom Attributes
+        </label>
+        <p className="mb-2 text-xs text-gray-400">
+          These will be copied to each ticket this template creates. The &ldquo;current&rdquo; value resets on each new ticket.
+        </p>
+        <CustomAttributesEditor
+          attributes={customAttributes}
+          onChange={setCustomAttributes}
+          showCurrent={false}
+        />
       </div>
 
       {/* Read-only info for edit */}

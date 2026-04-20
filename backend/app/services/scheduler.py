@@ -29,12 +29,34 @@ def compute_next_fire(template: RecurringTemplate) -> datetime:
 
 def fire_template(db, template: RecurringTemplate) -> None:
     """Create a ticket from a recurring template and update fire times."""
+    import json
+
+    # Copy custom attributes from template, resetting "current" values
+    attrs_str = template.custom_attributes or "[]"
+    try:
+        attrs = json.loads(attrs_str)
+        if not isinstance(attrs, list):
+            attrs = []
+    except (ValueError, TypeError):
+        attrs = []
+    # Reset current values on each fire (template provides goal structure)
+    for a in attrs:
+        if isinstance(a, dict):
+            t = a.get("type", "text")
+            if t == "number":
+                a["current"] = 0
+            elif t == "boolean":
+                a["current"] = False
+            else:
+                a["current"] = None
+
     ticket = Ticket(
         title=template.title,
         description=template.description,
         priority=template.priority,
         est_hours=template.est_hours,
         profile_id=template.profile_id,
+        custom_attributes=json.dumps(attrs),
     )
     # Set relative due date if configured
     if template.due_in_days is not None:

@@ -1,6 +1,6 @@
 import re
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -71,12 +71,23 @@ class UserUpdateActive(BaseModel):
 # Ticket schemas
 # ---------------------------------------------------------------------------
 
+class CustomAttribute(BaseModel):
+    """A user-defined attribute on a ticket. Values can be any JSON type
+    (string, number, boolean, null). Optional type hint helps the UI render
+    appropriate controls."""
+    name: str = Field(..., min_length=1, max_length=100)
+    type: str = "text"  # "text" | "number" | "boolean" | "date"
+    goal: Optional[Any] = None
+    current: Optional[Any] = None
+
+
 class TicketBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=50000)
     due_date: Optional[date] = None
     priority: str = "default"
     est_hours: Optional[float] = None
+    custom_attributes: Optional[List[CustomAttribute]] = None
 
 
 class TicketCreate(TicketBase):
@@ -92,6 +103,7 @@ class TicketUpdate(BaseModel):
     est_hours: Optional[float] = None
     status: Optional[str] = None
     related_ticket_ids: Optional[List[int]] = None
+    custom_attributes: Optional[List[CustomAttribute]] = None
 
 
 class TicketResponse(BaseModel):
@@ -106,6 +118,7 @@ class TicketResponse(BaseModel):
     skip_count: int
     related_ticket_ids: List[int] = []
     profile_id: Optional[int] = None
+    custom_attributes: List[CustomAttribute] = []
 
     model_config = {"from_attributes": True}
 
@@ -171,6 +184,7 @@ class RecurringTemplateBase(BaseModel):
     interval_count: int = 1
     start_date: date
     due_in_days: Optional[int] = None
+    custom_attributes: Optional[List[CustomAttribute]] = None
 
 
 class RecurringTemplateCreate(RecurringTemplateBase):
@@ -187,6 +201,7 @@ class RecurringTemplateUpdate(BaseModel):
     interval_count: Optional[int] = None
     start_date: Optional[date] = None
     due_in_days: Optional[int] = None
+    custom_attributes: Optional[List[CustomAttribute]] = None
 
 
 class RecurringTemplateResponse(BaseModel):
@@ -202,6 +217,7 @@ class RecurringTemplateResponse(BaseModel):
     last_fired: Optional[datetime] = None
     next_fire: Optional[datetime] = None
     profile_id: Optional[int] = None
+    custom_attributes: List[CustomAttribute] = []
     due_in_days: Optional[int] = None
 
     model_config = {"from_attributes": True}

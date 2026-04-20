@@ -47,7 +47,9 @@ def _serialize_ticket(t: Ticket) -> dict:
         "priority": t.priority.value if t.priority else None,
         "est_hours": t.est_hours,
         "skip_count": t.skip_count,
+        "last_skipped_at": _serialize_date(t.last_skipped_at),
         "profile_id": t.profile_id,
+        "custom_attributes": t.custom_attributes or "[]",
     }
 
 
@@ -66,6 +68,7 @@ def _serialize_template(t: RecurringTemplate) -> dict:
         "next_fire": _serialize_date(t.next_fire),
         "profile_id": t.profile_id,
         "due_in_days": t.due_in_days,
+        "custom_attributes": t.custom_attributes or "[]",
     }
 
 
@@ -251,7 +254,13 @@ async def restore_backup(
                 priority=t.get("priority", "default"),
                 est_hours=t.get("est_hours"),
                 skip_count=t.get("skip_count", 0),
+                last_skipped_at=(
+                    datetime.fromisoformat(t["last_skipped_at"])
+                    if t.get("last_skipped_at")
+                    else None
+                ),
                 profile_id=new_profile_id,
+                custom_attributes=t.get("custom_attributes", "[]"),
             )
             db.add(ticket)
             db.flush()
@@ -286,6 +295,7 @@ async def restore_backup(
                 ),
                 profile_id=new_profile_id,
                 due_in_days=t.get("due_in_days"),
+                custom_attributes=t.get("custom_attributes", "[]"),
             )
             db.add(template)
         db.commit()

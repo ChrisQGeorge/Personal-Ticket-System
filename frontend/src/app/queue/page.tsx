@@ -238,12 +238,63 @@ export default function QueuePage() {
 
         {/* Description */}
         {ticket.description && (
-          <div className="mb-6 rounded-md bg-gray-50 p-4">
+          <div className="mb-4 rounded-md bg-gray-50 p-4">
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
               Description
             </h3>
             <div className="whitespace-pre-wrap text-sm text-gray-700">
               {ticket.description}
+            </div>
+          </div>
+        )}
+
+        {/* Custom Attributes */}
+        {ticket.custom_attributes && ticket.custom_attributes.length > 0 && (
+          <div className="mb-6 rounded-md bg-gray-50 p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Attributes
+            </h3>
+            <div className="space-y-2">
+              {ticket.custom_attributes.map((a, i) => {
+                const isNumber = a.type === "number";
+                const current = a.current;
+                const goal = a.goal;
+                let progress = 0;
+                if (isNumber && typeof current === "number" && typeof goal === "number" && goal > 0) {
+                  progress = Math.min(100, (current / goal) * 100);
+                }
+                return (
+                  <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-gray-700">{a.name}</span>
+                    <div className="flex items-center gap-2">
+                      {isNumber ? (
+                        <>
+                          <span className="text-gray-600 tabular-nums">
+                            {String(current ?? 0)} / {String(goal ?? 0)}
+                          </span>
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className="h-full bg-indigo-500 transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </>
+                      ) : a.type === "boolean" ? (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${current ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
+                          {current ? "Yes" : "No"}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">
+                          {current != null && current !== "" ? String(current) : <em className="text-gray-400">unset</em>}
+                          {goal != null && goal !== "" && current !== goal ? (
+                            <span className="text-gray-400"> / goal: {String(goal)}</span>
+                          ) : null}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

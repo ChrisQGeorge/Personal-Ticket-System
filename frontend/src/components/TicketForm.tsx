@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ticket, TicketCreate, TicketUpdate, Priority, TicketStatus, GameEvent } from "@/lib/types";
+import { Ticket, TicketCreate, TicketUpdate, Priority, TicketStatus, GameEvent, CustomAttribute } from "@/lib/types";
 import { createTicket, updateTicket, deleteTicket } from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
 import GameEventToast from "@/components/GameEventToast";
+import CustomAttributesEditor from "@/components/CustomAttributesEditor";
 
 const PRIORITIES: Priority[] = ["very low", "low", "default", "high", "very high"];
 const STATUSES: TicketStatus[] = ["open", "in-progress", "completed", "skipped"];
@@ -25,6 +26,9 @@ export default function TicketForm({ ticket }: Props) {
   const [status, setStatus] = useState<TicketStatus>(ticket?.status ?? "open");
   const [dueDate, setDueDate] = useState(ticket?.due_date ?? "");
   const [estHours, setEstHours] = useState(ticket?.est_hours?.toString() ?? "");
+  const [customAttributes, setCustomAttributes] = useState<CustomAttribute[]>(
+    ticket?.custom_attributes ?? []
+  );
   const [relatedIds, setRelatedIds] = useState(
     ticket?.related_ticket_ids?.join(", ") ?? ""
   );
@@ -60,6 +64,7 @@ export default function TicketForm({ ticket }: Props) {
           due_date: dueDate || undefined,
           est_hours: estHours ? parseFloat(estHours) : undefined,
           related_ticket_ids: related.length > 0 ? related : undefined,
+          custom_attributes: customAttributes,
         };
         await updateTicket(ticket!.id, data);
       } else {
@@ -71,6 +76,7 @@ export default function TicketForm({ ticket }: Props) {
           est_hours: estHours ? parseFloat(estHours) : undefined,
           related_ticket_ids: related.length > 0 ? related : undefined,
           profile_id: activeProfile?.id,
+          custom_attributes: customAttributes,
         };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result: any = await createTicket(data);
@@ -231,6 +237,18 @@ export default function TicketForm({ ticket }: Props) {
           onChange={(e) => setRelatedIds(e.target.value)}
           placeholder="e.g. 1, 5, 12"
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      </div>
+
+      {/* Custom Attributes */}
+      <div>
+        <label className="mb-2 block text-sm font-medium text-gray-700">
+          Custom Attributes
+        </label>
+        <CustomAttributesEditor
+          attributes={customAttributes}
+          onChange={setCustomAttributes}
+          showCurrent={true}
         />
       </div>
 

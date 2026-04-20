@@ -161,3 +161,55 @@ textarea { resize: vertical; min-height: 50px; }
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Custom Attributes — Create form */
+.attrs-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.attr-row {
+  background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px;
+  padding: 6px; display: flex; flex-direction: column; gap: 4px;
+}
+.attr-row-top { display: flex; gap: 4px; align-items: center; }
+.attr-row-top input { flex: 1; padding: 5px 8px; font-size: 12px; }
+.attr-row-top select { padding: 5px 4px; font-size: 12px; width: auto; }
+.attr-remove {
+  background: #fef2f2; color: #dc2626; border: none; border-radius: 4px;
+  width: 24px; height: 24px; cursor: pointer; font-size: 14px;
+}
+.attr-remove:hover { background: #fee2e2; }
+.attr-row-values { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.attr-row-values input, .attr-row-values select {
+  padding: 5px 8px; font-size: 12px;
+}
+.attr-row-values label {
+  display: block; font-size: 10px; font-weight: 600; color: #6b7280;
+  margin-bottom: 1px; text-transform: uppercase;
+}
+.btn-add-attr {
+  background: white; border: 1px dashed #d1d5db; border-radius: 6px;
+  padding: 5px 10px; font-size: 12px; cursor: pointer; color: #6b7280;
+  width: 100%;
+}
+.btn-add-attr:hover { border-color: #6366f1; color: #4f46e5; }
+
+/* Custom Attributes — Queue display */
+.queue-attrs {
+  background: #f3f4f6; border-radius: 6px; padding: 8px;
+  margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.queue-attr {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; font-size: 12px;
+}
+.queue-attr-name { font-weight: 600; color: #374151; }
+.queue-attr-value { color: #6b7280; font-variant-numeric: tabular-nums; }
+.queue-attr-progress {
+  height: 4px; width: 60px; background: #e5e7eb; border-radius: 2px; overflow: hidden;
+}
+.queue-attr-progress-fill {
+  height: 100%; background: #6366f1; transition: width 0.3s ease;
+}
+.queue-attr-boolean {
+  padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 700;
+}
+.queue-attr-boolean.true { background: #d1fae5; color: #065f46; }
+.queue-attr-boolean.false { background: #e5e7eb; color: #6b7280; }

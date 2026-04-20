@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime
 from typing import Optional
@@ -25,6 +26,16 @@ def _strip_html_tags(text: str) -> str:
     return re.sub(r'<[^>]+>', '', text)
 
 
+def _parse_custom_attributes(value: Optional[str]) -> list:
+    if not value:
+        return []
+    try:
+        data = json.loads(value)
+        return data if isinstance(data, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
 def _template_to_response(template: RecurringTemplate) -> RecurringTemplateResponse:
     return RecurringTemplateResponse(
         id=template.id,
@@ -40,6 +51,7 @@ def _template_to_response(template: RecurringTemplate) -> RecurringTemplateRespo
         next_fire=template.next_fire,
         profile_id=template.profile_id,
         due_in_days=template.due_in_days,
+        custom_attributes=_parse_custom_attributes(template.custom_attributes),
     )
 
 
@@ -105,6 +117,7 @@ def create_template(
         start_date=payload.start_date,
         profile_id=profile_id,
         due_in_days=payload.due_in_days,
+        custom_attributes=json.dumps([a.model_dump() for a in payload.custom_attributes]) if payload.custom_attributes else "[]",
     )
     # Compute initial next_fire
     template.next_fire = compute_next_fire(template)
@@ -138,6 +151,9 @@ def update_template(
         update_data["title"] = _strip_html_tags(update_data["title"])
     if "description" in update_data:
         update_data["description"] = _strip_html_tags(update_data["description"]) if update_data["description"] else None
+    if "custom_attributes" in update_data:
+        attrs = update_data.pop("custom_attributes")
+        template.custom_attributes = json.dumps(attrs) if attrs is not None else "[]"
     for field, value in update_data.items():
         setattr(template, field, value)
 

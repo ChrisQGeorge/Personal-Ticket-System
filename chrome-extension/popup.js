@@ -4,6 +4,7 @@ let currentUser = null;
 let profiles = [];
 let currentTicket = null;
 let gameStats = null;
+let createAttrs = []; // Array of {name, type, goal, current}
 
 // === HELPERS ===
 const $ = (sel) => document.querySelector(sel);
@@ -235,6 +236,187 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // === CREATE TICKET ===
+// === CUSTOM ATTRIBUTES (Create form) ===
+function defaultValueForType(t) {
+  if (t === 'number') return 0;
+  if (t === 'boolean') return false;
+  return '';
+}
+
+function renderCreateAttrs() {
+  const container = $('#create-attrs');
+  container.innerHTML = '';
+  createAttrs.forEach((attr, i) => {
+    const row = document.createElement('div');
+    row.className = 'attr-row';
+
+    // Top: name + type + remove
+    const top = document.createElement('div');
+    top.className = 'attr-row-top';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Attribute name';
+    nameInput.value = attr.name || '';
+    nameInput.maxLength = 100;
+    nameInput.addEventListener('input', (e) => { createAttrs[i].name = e.target.value; });
+
+    const typeSelect = document.createElement('select');
+    ['text', 'number', 'boolean', 'date'].forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t === 'boolean' ? 'Yes/No' : t.charAt(0).toUpperCase() + t.slice(1);
+      if (t === attr.type) opt.selected = true;
+      typeSelect.appendChild(opt);
+    });
+    typeSelect.addEventListener('change', (e) => {
+      const newType = e.target.value;
+      createAttrs[i].type = newType;
+      createAttrs[i].goal = defaultValueForType(newType);
+      createAttrs[i].current = defaultValueForType(newType);
+      renderCreateAttrs();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'attr-remove';
+    removeBtn.textContent = '\u00d7';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', () => {
+      createAttrs.splice(i, 1);
+      renderCreateAttrs();
+    });
+
+    top.appendChild(nameInput);
+    top.appendChild(typeSelect);
+    top.appendChild(removeBtn);
+
+    // Values: goal + current
+    const values = document.createElement('div');
+    values.className = 'attr-row-values';
+
+    ['goal', 'current'].forEach((field) => {
+      const wrap = document.createElement('div');
+      const lbl = document.createElement('label');
+      lbl.textContent = field === 'goal' ? 'Goal' : 'Current';
+      wrap.appendChild(lbl);
+
+      let input;
+      if (attr.type === 'boolean') {
+        input = document.createElement('select');
+        ['false', 'true'].forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = v === 'true' ? 'Yes' : 'No';
+          if (String(attr[field]) === v) opt.selected = true;
+          input.appendChild(opt);
+        });
+        input.addEventListener('change', (e) => {
+          createAttrs[i][field] = e.target.value === 'true';
+        });
+      } else if (attr.type === 'number') {
+        input = document.createElement('input');
+        input.type = 'number';
+        input.step = 'any';
+        input.value = attr[field] == null ? '' : attr[field];
+        input.addEventListener('input', (e) => {
+          createAttrs[i][field] = e.target.value === '' ? null : parseFloat(e.target.value);
+        });
+      } else if (attr.type === 'date') {
+        input = document.createElement('input');
+        input.type = 'date';
+        input.value = typeof attr[field] === 'string' ? attr[field] : '';
+        input.addEventListener('input', (e) => {
+          createAttrs[i][field] = e.target.value;
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = attr[field] == null ? '' : String(attr[field]);
+        input.addEventListener('input', (e) => {
+          createAttrs[i][field] = e.target.value;
+        });
+      }
+      wrap.appendChild(input);
+      values.appendChild(wrap);
+    });
+
+    row.appendChild(top);
+    row.appendChild(values);
+    container.appendChild(row);
+  });
+}
+
+$('#create-attr-add').addEventListener('click', () => {
+  createAttrs.push({
+    name: '',
+    type: 'text',
+    goal: defaultValueForType('text'),
+    current: defaultValueForType('text'),
+  });
+  renderCreateAttrs();
+});
+
+// === QUEUE CUSTOM ATTRIBUTES (Display) ===
+function renderQueueAttrs(ticket) {
+  const container = $('#queue-ticket-attrs');
+  const attrs = ticket.custom_attributes || [];
+  if (!attrs.length) {
+    hide(container);
+    return;
+  }
+  container.innerHTML = '';
+  attrs.forEach((attr) => {
+    const row = document.createElement('div');
+    row.className = 'queue-attr';
+
+    const name = document.createElement('span');
+    name.className = 'queue-attr-name';
+    name.textContent = attr.name;
+    row.appendChild(name);
+
+    const right = document.createElement('span');
+    right.style.display = 'flex';
+    right.style.alignItems = 'center';
+    right.style.gap = '6px';
+
+    if (attr.type === 'number') {
+      const current = typeof attr.current === 'number' ? attr.current : 0;
+      const goal = typeof attr.goal === 'number' ? attr.goal : 0;
+      const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
+
+      const val = document.createElement('span');
+      val.className = 'queue-attr-value';
+      val.textContent = `${current} / ${goal}`;
+      right.appendChild(val);
+
+      const bar = document.createElement('div');
+      bar.className = 'queue-attr-progress';
+      const fill = document.createElement('div');
+      fill.className = 'queue-attr-progress-fill';
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+      right.appendChild(bar);
+    } else if (attr.type === 'boolean') {
+      const badge = document.createElement('span');
+      badge.className = `queue-attr-boolean ${attr.current ? 'true' : 'false'}`;
+      badge.textContent = attr.current ? 'YES' : 'NO';
+      right.appendChild(badge);
+    } else {
+      const val = document.createElement('span');
+      val.className = 'queue-attr-value';
+      const cur = attr.current == null || attr.current === '' ? '—' : String(attr.current);
+      const goalStr = attr.goal == null || attr.goal === '' ? '' : ` / ${attr.goal}`;
+      val.textContent = cur + goalStr;
+      right.appendChild(val);
+    }
+
+    row.appendChild(right);
+    container.appendChild(row);
+  });
+  show(container);
+}
+
 $('#create-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   hide($('#create-error'));
@@ -259,6 +441,10 @@ $('#create-form').addEventListener('submit', async (e) => {
   const due = $('#create-due').value;
   if (due) data.due_date = due;
 
+  // Include custom attributes (filter out those without names)
+  const validAttrs = createAttrs.filter((a) => a.name && a.name.trim());
+  if (validAttrs.length) data.custom_attributes = validAttrs;
+
   try {
     const result = await api('/api/tickets', {
       method: 'POST',
@@ -273,9 +459,11 @@ $('#create-form').addEventListener('submit', async (e) => {
       updateGameBar();
     }
 
-    // Reset form after delay
+    // Reset form and attrs after delay
     setTimeout(() => {
       $('#create-form').reset();
+      createAttrs = [];
+      renderCreateAttrs();
       hide($('#create-success'));
       hide($('#create-game-event'));
     }, 3000);
@@ -329,6 +517,8 @@ function renderQueueTicket(ticket) {
   $('#queue-ticket-due').textContent = ticket.due_date ? `\uD83D\uDCC5 ${ticket.due_date}` : '';
   $('#queue-ticket-hours').textContent = ticket.est_hours != null ? `\u23F1 ${ticket.est_hours}h` : '';
   $('#queue-ticket-skips').textContent = ticket.skip_count > 0 ? `\u21A9 ${ticket.skip_count} skips` : '';
+
+  renderQueueAttrs(ticket);
 }
 
 $('#queue-complete-btn').addEventListener('click', async () => {
