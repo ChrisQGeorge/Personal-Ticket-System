@@ -213,3 +213,46 @@ textarea { resize: vertical; min-height: 50px; }
 }
 .queue-attr-boolean.true { background: #d1fae5; color: #065f46; }
 .queue-attr-boolean.false { background: #e5e7eb; color: #6b7280; }
+
+/* Queue editable fields */
+.queue-save-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fef3c7; border: 1px solid #fbbf24; border-radius: 6px;
+  padding: 6px 10px; margin-bottom: 10px; font-size: 12px; color: #92400e;
+}
+.queue-save-success {
+  background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 6px;
+  padding: 6px 10px; margin-bottom: 10px; font-size: 12px; color: #065f46;
+  text-align: center; font-weight: 600;
+}
+.btn-small { padding: 4px 10px; min-height: 28px; font-size: 12px; }
+
+/* Queue attribute editors */
+.queue-attr {
+  flex-direction: column; align-items: stretch; gap: 4px;
+}
+.queue-attr-top {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px;
+}
+.queue-attr-controls {
+  display: flex; align-items: center; gap: 4px;
+}
+.queue-attr-btn {
+  min-width: 24px; min-height: 24px;
+  background: white; border: 1px solid #d1d5db; border-radius: 4px;
+  cursor: pointer; font-size: 14px; font-weight: bold; color: #4b5563;
+}
+.queue-attr-btn:hover { background: #f3f4f6; }
+.queue-attr-input {
+  width: 50px; padding: 3px 6px; font-size: 12px; text-align: center;
+}
+.queue-attr-input-wide {
+  flex: 1; padding: 4px 8px; font-size: 12px;
+}
+.queue-attr-toggle {
+  padding: 4px 12px; border: none; border-radius: 4px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.queue-attr-toggle.yes { background: #d1fae5; color: #065f46; }
+.queue-attr-toggle.no { background: #e5e7eb; color: #6b7280; }

@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { Ticket, GameStats, GameEvent, SkipGameEvent } from "@/lib/types";
-import { getNextTicket, completeTicket, skipTicket, getGameStats } from "@/lib/api";
+import { Ticket, GameStats, GameEvent, SkipGameEvent, CustomAttribute } from "@/lib/types";
+import {
+  getNextTicket,
+  completeTicket,
+  skipTicket,
+  getGameStats,
+  updateTicket,
+} from "@/lib/api";
 import { useProfile } from "@/lib/profile-context";
 import GameEventToast from "@/components/GameEventToast";
 
@@ -15,6 +21,13 @@ export default function QueuePage() {
   const [error, setError] = useState("");
   const [empty, setEmpty] = useState(false);
 
+  // Editable fields (local state, synced to ticket on load)
+  const [editDescription, setEditDescription] = useState("");
+  const [editHours, setEditHours] = useState("");
+  const [editAttrs, setEditAttrs] = useState<CustomAttribute[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   // Gamification state
   const [gameStats, setGameStats] = useState<GameStats | null>(null);
   const [gameEvent, setGameEvent] = useState<GameEvent | SkipGameEvent | null>(null);
@@ -23,10 +36,14 @@ export default function QueuePage() {
     setLoading(true);
     setError("");
     setEmpty(false);
+    setSaveSuccess(false);
     try {
       const t = await getNextTicket(activeProfile?.id);
       if (t) {
         setTicket(t);
+        setEditDescription(t.description ?? "");
+        setEditHours(t.est_hours != null ? String(t.est_hours) : "");
+        setEditAttrs(t.custom_attributes ?? []);
       } else {
         setTicket(null);
         setEmpty(true);
@@ -41,9 +58,7 @@ export default function QueuePage() {
   const loadGameStats = useCallback(() => {
     getGameStats()
       .then(setGameStats)
-      .catch(() => {
-        /* gamification may not be available */
-      });
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -51,11 +66,50 @@ export default function QueuePage() {
     loadGameStats();
   }, [loadNext, loadGameStats]);
 
+  // Detect if any fields are dirty vs. the loaded ticket
+  const isDirty = (() => {
+    if (!ticket) return false;
+    if (editDescription !== (ticket.description ?? "")) return true;
+    const ticketHoursStr = ticket.est_hours != null ? String(ticket.est_hours) : "";
+    if (editHours !== ticketHoursStr) return true;
+    if (JSON.stringify(editAttrs) !== JSON.stringify(ticket.custom_attributes ?? [])) return true;
+    return false;
+  })();
+
+  async function handleSaveEdits() {
+    if (!ticket || !isDirty) return;
+    setSaving(true);
+    setError("");
+    setSaveSuccess(false);
+    try {
+      const updated = await updateTicket(ticket.id, {
+        description: editDescription || null,
+        est_hours: editHours ? parseFloat(editHours) : null,
+        custom_attributes: editAttrs,
+      });
+      setTicket(updated);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleComplete() {
     if (!ticket) return;
     setActing(true);
     setError("");
     try {
+      // Save edits first if any are pending
+      if (isDirty) {
+        await updateTicket(ticket.id, {
+          description: editDescription || null,
+          est_hours: editHours ? parseFloat(editHours) : null,
+          custom_attributes: editAttrs,
+        });
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result: any = await completeTicket(ticket.id);
       if (result?.game_event) {
@@ -65,6 +119,9 @@ export default function QueuePage() {
       const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
+        setEditDescription(next.description ?? "");
+        setEditHours(next.est_hours != null ? String(next.est_hours) : "");
+        setEditAttrs(next.custom_attributes ?? []);
       } else {
         setTicket(null);
         setEmpty(true);
@@ -81,6 +138,14 @@ export default function QueuePage() {
     setActing(true);
     setError("");
     try {
+      // Save edits first if any are pending
+      if (isDirty) {
+        await updateTicket(ticket.id, {
+          description: editDescription || null,
+          est_hours: editHours ? parseFloat(editHours) : null,
+          custom_attributes: editAttrs,
+        });
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result: any = await skipTicket(ticket.id);
       if (result?.game_event) {
@@ -90,6 +155,9 @@ export default function QueuePage() {
       const next = await getNextTicket(activeProfile?.id);
       if (next) {
         setTicket(next);
+        setEditDescription(next.description ?? "");
+        setEditHours(next.est_hours != null ? String(next.est_hours) : "");
+        setEditAttrs(next.custom_attributes ?? []);
       } else {
         setTicket(null);
         setEmpty(true);
@@ -101,13 +169,17 @@ export default function QueuePage() {
     }
   }
 
+  function updateAttr(index: number, patch: Partial<CustomAttribute>) {
+    setEditAttrs((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+  }
+
   const gamificationEnabled = gameStats?.gamification_enabled;
 
   if (loading) {
     return <p className="text-sm text-gray-400">Loading queue...</p>;
   }
 
-  if (error) {
+  if (error && !ticket) {
     return (
       <div className="space-y-3">
         <h1 className="text-2xl font-bold text-gray-900">Work Queue</h1>
@@ -128,9 +200,7 @@ export default function QueuePage() {
         <h1 className="text-2xl font-bold text-gray-900">Work Queue</h1>
         <div className="mx-auto max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
           <p className="text-lg text-gray-600">No tickets in queue!</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Create one to get started.
-          </p>
+          <p className="mt-1 text-sm text-gray-400">Create one to get started.</p>
           <Link
             href="/tickets/new"
             className="mt-4 inline-block min-h-[44px] rounded-md bg-indigo-600 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
@@ -154,21 +224,16 @@ export default function QueuePage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Work Queue</h1>
 
-      {/* Game event toast */}
       <GameEventToast event={gameEvent} onDismiss={() => setGameEvent(null)} />
 
-      {/* Gamification status bar */}
       {gamificationEnabled && gameStats && (
         <div className="mx-auto flex max-w-2xl items-center justify-center gap-4 rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 px-4 py-2 text-sm">
-          <span className="font-semibold text-purple-700">
-            Lv.{gameStats.current_level}
-          </span>
+          <span className="font-semibold text-purple-700">Lv.{gameStats.current_level}</span>
           <span className="text-gray-400">|</span>
           {gameStats.current_streak > 0 && (
             <>
               <span className="flex items-center gap-1 text-orange-600">
-                {gameStats.current_streak >= 3 ? "\uD83D\uDD25" : ""}{" "}
-                {gameStats.current_streak} streak
+                {gameStats.current_streak >= 3 ? "\uD83D\uDD25" : ""} {gameStats.current_streak} streak
               </span>
               <span className="text-gray-400">|</span>
             </>
@@ -181,9 +246,7 @@ export default function QueuePage() {
               <span className="text-gray-400">|</span>
             </>
           )}
-          <span className="text-amber-600 font-medium">
-            {gameStats.total_xp.toLocaleString()} XP
-          </span>
+          <span className="font-medium text-amber-600">{gameStats.total_xp.toLocaleString()} XP</span>
         </div>
       )}
 
@@ -194,11 +257,8 @@ export default function QueuePage() {
             <span className="mr-1 text-gray-400">#{ticket.id}</span>
             {ticket.title}
           </h2>
-          <Link
-            href={`/tickets/${ticket.id}`}
-            className="text-xs text-indigo-600 hover:underline"
-          >
-            Edit
+          <Link href={`/tickets/${ticket.id}`} className="text-xs text-indigo-600 hover:underline">
+            Full Edit
           </Link>
         </div>
 
@@ -206,9 +266,7 @@ export default function QueuePage() {
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
           <div>
             <span className="font-medium text-gray-500">Priority</span>
-            <div className={priorityColors[ticket.priority] ?? ""}>
-              {ticket.priority}
-            </div>
+            <div className={priorityColors[ticket.priority] ?? ""}>{ticket.priority}</div>
           </div>
           <div>
             <span className="font-medium text-gray-500">Status</span>
@@ -224,78 +282,149 @@ export default function QueuePage() {
               <div>{ticket.due_date}</div>
             </div>
           )}
-          {ticket.est_hours != null && (
-            <div>
-              <span className="font-medium text-gray-500">Est. Hours</span>
-              <div>{ticket.est_hours}</div>
-            </div>
-          )}
+          <div>
+            <span className="mb-1 block font-medium text-gray-500">Est. Hours</span>
+            <input
+              type="number"
+              min="0"
+              step="0.25"
+              value={editHours}
+              onChange={(e) => setEditHours(e.target.value)}
+              placeholder="—"
+              className="w-full max-w-[120px] rounded-md border border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
           <div>
             <span className="font-medium text-gray-500">Created</span>
             <div>{new Date(ticket.date_created).toLocaleDateString()}</div>
           </div>
         </div>
 
-        {/* Description */}
-        {ticket.description && (
-          <div className="mb-4 rounded-md bg-gray-50 p-4">
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Description
-            </h3>
-            <div className="whitespace-pre-wrap text-sm text-gray-700">
-              {ticket.description}
-            </div>
-          </div>
-        )}
+        {/* Description (editable) */}
+        <div className="mb-4 rounded-md bg-gray-50 p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Description / Notes
+          </h3>
+          <textarea
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Add notes or description..."
+            rows={4}
+            className="w-full resize-y rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
 
-        {/* Custom Attributes */}
-        {ticket.custom_attributes && ticket.custom_attributes.length > 0 && (
-          <div className="mb-6 rounded-md bg-gray-50 p-4">
+        {/* Custom Attributes (editable) */}
+        {editAttrs.length > 0 && (
+          <div className="mb-4 rounded-md bg-gray-50 p-4">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
               Attributes
             </h3>
-            <div className="space-y-2">
-              {ticket.custom_attributes.map((a, i) => {
+            <div className="space-y-3">
+              {editAttrs.map((a, i) => {
                 const isNumber = a.type === "number";
-                const current = a.current;
-                const goal = a.goal;
-                let progress = 0;
-                if (isNumber && typeof current === "number" && typeof goal === "number" && goal > 0) {
-                  progress = Math.min(100, (current / goal) * 100);
-                }
+                const goal = typeof a.goal === "number" ? a.goal : 0;
+                const current = typeof a.current === "number" ? a.current : 0;
+                const progress = isNumber && goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
+
                 return (
-                  <div key={i} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-gray-700">{a.name}</span>
-                    <div className="flex items-center gap-2">
-                      {isNumber ? (
-                        <>
-                          <span className="text-gray-600 tabular-nums">
-                            {String(current ?? 0)} / {String(goal ?? 0)}
-                          </span>
-                          <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200">
-                            <div
-                              className="h-full bg-indigo-500 transition-all"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </>
-                      ) : a.type === "boolean" ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${current ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
-                          {current ? "Yes" : "No"}
-                        </span>
-                      ) : (
-                        <span className="text-gray-600">
-                          {current != null && current !== "" ? String(current) : <em className="text-gray-400">unset</em>}
-                          {goal != null && goal !== "" && current !== goal ? (
-                            <span className="text-gray-400"> / goal: {String(goal)}</span>
-                          ) : null}
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-700">{a.name}</span>
+                      {isNumber && (
+                        <span className="text-xs text-gray-500 tabular-nums">
+                          {current} / {goal}
                         </span>
                       )}
                     </div>
+                    {isNumber ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateAttr(i, { current: Math.max(0, current - 1) })}
+                          className="min-h-[32px] min-w-[32px] rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={current}
+                          onChange={(e) => updateAttr(i, { current: parseFloat(e.target.value) || 0 })}
+                          className="w-20 rounded-md border border-gray-300 px-2 py-1 text-center text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateAttr(i, { current: current + 1 })}
+                          className="min-h-[32px] min-w-[32px] rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+                        >
+                          +
+                        </button>
+                        <div className="ml-2 h-2 flex-1 overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className="h-full bg-indigo-500 transition-all"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : a.type === "boolean" ? (
+                      <button
+                        type="button"
+                        onClick={() => updateAttr(i, { current: !a.current })}
+                        className={`min-h-[32px] rounded-md px-4 py-1 text-sm font-medium transition-colors ${
+                          a.current
+                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                        }`}
+                      >
+                        {a.current ? "Yes" : "No"}
+                      </button>
+                    ) : a.type === "date" ? (
+                      <input
+                        type="date"
+                        value={typeof a.current === "string" ? a.current : ""}
+                        onChange={(e) => updateAttr(i, { current: e.target.value })}
+                        className="rounded-md border border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={a.current == null ? "" : String(a.current)}
+                        onChange={(e) => updateAttr(i, { current: e.target.value })}
+                        placeholder={a.goal != null ? `Goal: ${a.goal}` : ""}
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    )}
                   </div>
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Save bar (only shown when dirty) */}
+        {isDirty && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-amber-50 px-4 py-2 text-sm">
+            <span className="text-amber-800">You have unsaved changes.</span>
+            <button
+              onClick={handleSaveEdits}
+              disabled={saving}
+              className="min-h-[36px] rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        )}
+
+        {saveSuccess && (
+          <div className="mb-4 rounded-md bg-green-50 px-4 py-2 text-sm text-green-700">
+            ✓ Changes saved
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
+            {error}
           </div>
         )}
 

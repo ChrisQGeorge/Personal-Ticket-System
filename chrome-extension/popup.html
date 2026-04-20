@@ -134,13 +134,24 @@
             <span class="ticket-priority" id="queue-ticket-priority"></span>
           </div>
           <h3 class="ticket-title" id="queue-ticket-title"></h3>
-          <p class="ticket-description" id="queue-ticket-description"></p>
           <div class="ticket-meta">
             <span id="queue-ticket-due"></span>
-            <span id="queue-ticket-hours"></span>
             <span id="queue-ticket-skips"></span>
           </div>
+          <div class="form-group compact">
+            <label>Description / Notes</label>
+            <textarea id="queue-edit-description" rows="3" placeholder="Add notes..."></textarea>
+          </div>
+          <div class="form-group compact">
+            <label>Est. Hours</label>
+            <input type="number" id="queue-edit-hours" min="0" step="0.25" placeholder="—">
+          </div>
           <div id="queue-ticket-attrs" class="queue-attrs hidden"></div>
+          <div id="queue-save-bar" class="queue-save-bar hidden">
+            <span>Unsaved changes</span>
+            <button id="queue-save-btn" class="btn btn-primary btn-small">Save</button>
+          </div>
+          <div id="queue-save-success" class="queue-save-success hidden">&#10003; Saved</div>
           <div class="ticket-actions">
             <button class="btn btn-complete" id="queue-complete-btn">&#10003; Complete</button>
             <button class="btn btn-skip" id="queue-skip-btn">&#8594; Skip</button>
